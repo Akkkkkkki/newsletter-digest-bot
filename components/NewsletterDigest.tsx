@@ -52,8 +52,8 @@ export default function NewsletterDigest() {
     ? newsletters.filter(n => n.newsletter_insights?.category === selectedCategory)
     : newsletters
 
-  const categories = Array.from(
-    new Set(newsletters.map(n => n.newsletter_insights?.category).filter(Boolean))
+  const categories: string[] = Array.from(
+    new Set(newsletters.map(n => n.newsletter_insights?.category).filter(Boolean) as string[])
   )
 
   const getSentimentColor = (sentiment: string) => {
