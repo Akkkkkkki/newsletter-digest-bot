@@ -1,6 +1,6 @@
 const { supabase } = require('../utils/supabase');
 const { GmailService } = require('../utils/gmail');
-const { extractNewsletterInsights } = require('../utils/openai');
+const { extractNewsletterInsights, generateEmbedding } = require('../utils/openai');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -8,17 +8,43 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { access_token, user_id } = req.body;
+    const { access_token, refresh_token, user_id } = req.body;
 
     if (!access_token || !user_id) {
       return res.status(400).json({ error: 'Access token and user ID required' });
     }
 
-    // Initialize Gmail service
-    const gmailService = new GmailService(access_token);
+    // Initialize Gmail service with refresh token if provided
+    const gmailService = new GmailService(access_token, refresh_token);
 
-    // Fetch recent newsletters
-    const newsletters = await gmailService.fetchRecentNewsletters(10);
+    // Fetch user's allowed newsletter sources
+    const { data: sources, error: sourcesError } = await supabase
+      .from('newsletter_sources')
+      .select('email_address')
+      .eq('user_id', user_id)
+      .eq('is_active', true);
+    if (sourcesError) {
+      return res.status(500).json({ error: 'Failed to fetch newsletter sources' });
+    }
+    const allowedSenders = (sources || []).map(s => s.email_address.toLowerCase());
+    // Optionally, allow some default domains (e.g., substack.com)
+    const allowedDomains = ['substack.com', 'deeplearning.ai'];
+    // Fetch already-processed Gmail message IDs for this user
+    const { data: processed, error: processedError } = await supabase
+      .from('newsletters')
+      .select('gmail_message_id')
+      .eq('user_id', user_id);
+    if (processedError) {
+      return res.status(500).json({ error: 'Failed to fetch processed message IDs' });
+    }
+    const processedMessageIds = (processed || []).map(n => n.gmail_message_id);
+    // Fetch recent newsletters with filtering
+    const newsletters = await gmailService.fetchRecentNewsletters({
+      maxResults: 10,
+      allowedSenders,
+      allowedDomains,
+      processedMessageIds
+    });
 
     const processedNewsletters = [];
 
@@ -64,7 +90,7 @@ export default async function handler(req, res) {
         const insights = await extractNewsletterInsights(newsletter.content, senderInfo);
 
         // Insert insights
-        const { error: insightsError } = await supabase
+        const { data: insertedInsight, error: insightsError } = await supabase
           .from('newsletter_insights')
           .insert({
             newsletter_id: insertedNewsletter.id,
@@ -77,10 +103,68 @@ export default async function handler(req, res) {
             action_items: insights.action_items,
             links_extracted: insights.links_extracted,
             extraction_model: 'gpt-3.5-turbo'
-          });
+          })
+          .select()
+          .single();
 
         if (insightsError) {
           console.error('Error inserting insights:', insightsError);
+        } else if (insertedInsight) {
+          // Generate embedding for the summary
+          const embedding = await generateEmbedding(insights.summary);
+          if (embedding) {
+            // Store embedding in newsletter_insights
+            await supabase
+              .from('newsletter_insights')
+              .update({ embedding })
+              .eq('id', insertedInsight.id);
+
+            // Similarity grouping logic
+            // 1. Find existing groups for this user with cosine similarity > 0.85
+            const { data: groups } = await supabase
+              .rpc('match_similarity_groups', {
+                user_id: user_id,
+                embedding: embedding,
+                threshold: 0.85
+              });
+
+            let groupId = null;
+            if (groups && groups.length > 0) {
+              // Use the most similar group
+              groupId = groups[0].id;
+              // Add to group membership
+              await supabase
+                .from('newsletter_group_membership')
+                .insert({
+                  group_id: groupId,
+                  newsletter_insight_id: insertedInsight.id,
+                  similarity_score: groups[0].similarity
+                });
+              // Optionally: update group embedding (average of all member embeddings)
+              // (Not implemented here for brevity)
+            } else {
+              // Create new group
+              const { data: newGroup } = await supabase
+                .from('newsletter_similarity_groups')
+                .insert({
+                  user_id: user_id,
+                  group_embedding: embedding,
+                  representative_summary: insights.summary
+                })
+                .select()
+                .single();
+              if (newGroup) {
+                groupId = newGroup.id;
+                await supabase
+                  .from('newsletter_group_membership')
+                  .insert({
+                    group_id: groupId,
+                    newsletter_insight_id: insertedInsight.id,
+                    similarity_score: 1.0
+                  });
+              }
+            }
+          }
         }
 
         // Update newsletter status

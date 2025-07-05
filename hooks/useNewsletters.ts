@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Newsletter } from '@/lib/types'
+import type { DigestSummary } from '@/lib/types'
 
 interface UseNewslettersOptions {
   daysBack?: number
@@ -39,7 +40,7 @@ export const useNewsletters = (options: UseNewslettersOptions = {}) => {
     }
   }
 
-  const processNewsletters = async (userId: string, accessToken: string) => {
+  const processNewsletters = async (userId: string, accessToken: string, refreshToken?: string) => {
     setLoading(true)
     setError(null)
 
@@ -51,7 +52,8 @@ export const useNewsletters = (options: UseNewslettersOptions = {}) => {
         },
         body: JSON.stringify({
           user_id: userId,
-          access_token: accessToken
+          access_token: accessToken,
+          ...(refreshToken ? { refresh_token: refreshToken } : {})
         })
       })
 
@@ -80,4 +82,38 @@ export const useNewsletters = (options: UseNewslettersOptions = {}) => {
     fetchNewsletters,
     processNewsletters
   }
+}
+
+export const useDigestSummary = () => {
+  const [digest, setDigest] = useState<DigestSummary | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchDigestSummary = async (userId: string, periodStart?: Date, periodEnd?: Date) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const body: any = { user_id: userId }
+      if (periodStart) body.period_start = periodStart.toISOString()
+      if (periodEnd) body.period_end = periodEnd.toISOString()
+      const response = await fetch('/api/newsletters/generateDigest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      setDigest(data.digest || null)
+      return data.digest
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch digest summary')
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { digest, loading, error, fetchDigestSummary }
 } 

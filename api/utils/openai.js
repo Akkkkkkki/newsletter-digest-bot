@@ -58,4 +58,52 @@ Return ONLY valid JSON in this exact format:
   }
 }
 
-module.exports = { extractNewsletterInsights }; 
+/**
+ * Generate an embedding vector for the given text using OpenAI's embedding API.
+ * @param {string} text - The text to embed.
+ * @returns {Promise<number[]>} - The embedding vector.
+ */
+async function generateEmbedding(text) {
+  try {
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-ada-002',
+      input: text.substring(0, 8000) // OpenAI limit
+    });
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error('OpenAI embedding error:', error);
+    return null;
+  }
+}
+
+/**
+ * Synthesize a digest summary from an array of newsletter insights using OpenAI.
+ * @param {Array} insights - Array of newsletter insight objects.
+ * @returns {Promise<Object>} - Synthesized digest summary.
+ */
+async function synthesizeDigestSummary(insights) {
+  // Prepare the input for the LLM
+  const summaries = insights.map((i, idx) => `Item ${idx + 1}:\nSummary: ${i.summary}\nTopics: ${i.key_topics?.join(', ') || ''}\nCategory: ${i.category || ''}\nSentiment: ${i.sentiment || ''}\nCompanies: ${i.companies_mentioned?.join(', ') || ''}\nPeople: ${i.people_mentioned?.join(', ') || ''}\nAction Items: ${i.action_items?.join(', ') || ''}\nLinks: ${i.links_extracted?.join(', ') || ''}`).join('\n---\n');
+
+  const prompt = `You are an expert news digest assistant. Given the following newsletter items, synthesize a concise, high-signal digest for the user.\n\nInstructions:\n- Surface consensus topics and trends (items mentioned in multiple newsletters).\n- Highlight the most important, referenced, and interesting content.\n- Group similar items and avoid repetition.\n- Output a JSON object with:\n  summary_content: a 3-5 sentence digest summary,\n  top_topics: array of the most important topics,\n  key_insights: array of the most referenced or interesting insights,\n  sentiment_analysis: object with counts of positive, neutral, and negative items.\n\nNewsletter Items:\n${summaries}\n\nReturn ONLY valid JSON in this format:\n{\n  "summary_content": "...",\n  "top_topics": ["topic1", "topic2"],\n  "key_insights": ["insight1", "insight2"],\n  "sentiment_analysis": {"positive": 0, "neutral": 0, "negative": 0}\n}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 1000
+    });
+    return JSON.parse(response.choices[0].message.content);
+  } catch (error) {
+    console.error('OpenAI digest synthesis error:', error);
+    return {
+      summary_content: "Error synthesizing digest.",
+      top_topics: [],
+      key_insights: [],
+      sentiment_analysis: { positive: 0, neutral: 0, negative: 0 }
+    };
+  }
+}
+
+module.exports = { extractNewsletterInsights, generateEmbedding, synthesizeDigestSummary }; 

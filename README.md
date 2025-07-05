@@ -1,5 +1,18 @@
 # Newsletter Digest Bot
 
+## 🚧 Development Progress
+
+- [x] Gmail OAuth integration and newsletter fetching
+- [x] AI-powered content extraction and summarization (OpenAI)
+- [x] Topic/entity extraction and similarity grouping (LLM embeddings)
+- [x] Digest synthesis: Users can now generate and view AI-powered digest summaries for any custom date range (default: last 7 days) in the UI
+- [x] Custom period picker for digest summaries in the UI
+- [x] **Consensus/trending news feed:** Groups similar news items across newsletters, ranks by number of mentions, and shows which newsletters mentioned each item
+- [x] **Newsletter sources management UI:** Users can add, remove, and manage which senders are considered newsletters
+- [x] **Backend: Only processes newsletter emails (by sender/heuristics), never reprocesses already-processed emails**
+- [ ] Favorites, personalization, and feedback (coming soon)
+- [ ] Trending/consensus detection and discover section (coming soon)
+
 AI-powered newsletter digest assistant that connects to Gmail, processes newsletters with OpenAI, and presents intelligent summaries.
 
 ## 🚀 Features
@@ -8,8 +21,130 @@ AI-powered newsletter digest assistant that connects to Gmail, processes newslet
 - 🤖 AI-powered content extraction and summarization  
 - 📊 Topic clustering and trend analysis
 - 🎯 Smart source management with credibility scoring
+- 📰 **Consensus/trending news feed**: See the most-mentioned news across all your newsletters, with a card showing which newsletters mentioned it and their comments
+- 🗂️ **Newsletter sources management UI**: Add/remove newsletter senders you want to follow
 - 📱 Responsive web interface
 - 🚀 Serverless deployment on Vercel
+
+## 🧭 Product Requirements Document (PRD)
+
+### Purpose
+Deliver a personalized, high-signal AI news digest that surfaces:
+- News and insights from your favorite people and trusted sources
+- Genuinely trending topics, tools, and events (not just generic "AI/LLM" headlines)
+- Only the most relevant, referenced, and interesting content—on your phone, in minutes
+
+### Target User
+- **Primary:** Users who want a curated, signal-over-noise AI digest, with a focus on trusted voices, trending items, and personal interests.
+
+### Key Features
+
+#### 1. Source & Author Prioritization
+- Highlight news from favorite authors/voices (e.g., Andrej Karpathy, a16z, Yann LeCun, etc.)
+- Let user "star" or "follow" people/organizations—these are surfaced at the top or in a special section
+
+#### 2. Smart Popularity & Trend Detection
+- **Consensus ranking:** Items referenced in many newsletters are ranked higher and shown at the top of the feed
+- Trending detection: Show "what's blowing up" (e.g., a new tool, paper, or event with a spike in mentions)
+
+#### 3. Fine-Grained Topic/Entity Extraction
+- Extract not just broad topics, but specific people, companies, tools, and events
+- Avoid surfacing generic "AI/LLM" news unless it's truly significant or trending
+
+#### 4. Personalized Filtering & Feedback
+- User can mark items as "more like this" or "less like this" to tune future digests
+- Option to mute generic or low-value topics
+
+#### 5. Digest Experience
+- Top Section: "From your favorites" (authors/sources you follow)
+- Trending Now: Most referenced items across all newsletters (**implemented as consensus feed**)
+- Discover: New or emerging topics/entities/tools
+
+#### 6. Mobile-First, Minimal UI
+- Fast, readable, touch-friendly, with easy navigation and feedback
+
+### Non-Goals
+- No multi-user support (for now).
+- No support for sources other than your Gmail newsletter subscriptions.
+- No advanced analytics or sharing features.
+- No desktop-optimized interface.
+
+### Technical Requirements
+- **Authentication:** OAuth with Gmail for secure newsletter access.
+- **Backend:** Node.js API for fetching, processing, and summarizing emails.
+- **LLM-Powered Processing & RAG:**
+  - Use LLMs (e.g., OpenAI GPT) for:
+    - Extracting and splitting news items from raw newsletter content
+    - Generating embeddings for similarity comparison
+    - Extracting metadata (topics, entities, sentiment, source, date, etc.) for each news item
+    - Grouping news items by similarity (deduplication by similarity, using a threshold on embedding similarity; not traditional clustering)
+    - Synthesizing a single summary per group
+  - Implement a Retrieval-Augmented Generation (RAG) system:
+    - Store news items and metadata in a vector database (e.g., Supabase, Pinecone)
+    - Enable semantic and metadata-based retrieval for synthesis, ranking, and user queries
+  - Minimize custom algorithm development by leveraging LLM and RAG capabilities for similarity grouping, summarization, and retrieval.
+- **Frontend:** Next.js/React with mobile-first design.
+- **Storage:** Supabase for user preferences, digests, and vectorized metadata.
+- **Deployment:** Vercel or similar, with HTTPS.
+- **Source:** Only Gmail newsletters from your email subscriptions are ingested and processed. No other sources are supported at this time.
+- **Newsletter Filtering:** Only emails from user-approved newsletter sources (or matching newsletter heuristics) are processed. Already-processed emails are never reprocessed.
+
+### Success Criteria
+- You see news from your favorite people/sources every day
+- Trending/consensus items are surfaced and easy to spot
+- Digest is concise, relevant, and never feels generic or repetitive
+- You can tune the feed with minimal effort
+
+---
+
+## 🗺 Roadmap
+
+1. **MVP: Personal AI Digest (Single-source Summarization)**
+   - Gmail OAuth integration
+   - Fetch and summarize AI newsletters
+   - Mobile-first UI (Android focus)
+   - Daily/weekly digest delivery
+
+2. **Multi-source Aggregation & Entity Extraction**
+   - Ingest multiple newsletters per theme
+   - Use LLM to extract and split news items, authors, sources, and entities
+   - Present all items in a single feed
+
+3. **Consensus Similarity Grouping & Ranking**
+   - Use LLM embeddings to group highly similar news items (above a threshold)
+   - Assign consensus scores based on number of sources mentioning each item
+   - Rank and display synthesized news at the top (**implemented as consensus feed**)
+
+4. **Personalization & Favorites**
+   - Allow user to star/follow authors and sources
+   - Surface favorite content in a dedicated section
+   - Enable feedback and muting of topics/entities
+
+5. **Trending & Discoverability**
+   - Detect and highlight trending topics, tools, and events
+   - Show new or emerging items in a "Discover" section
+
+6. **RAG System & Advanced Retrieval**
+   - Store news items and metadata in a vector database
+   - Implement Retrieval-Augmented Generation (RAG) for semantic and metadata-based retrieval
+   - Use metadata to enhance similarity grouping, ranking, and personalized feed
+
+7. **Polish & Notifications**
+   - Push/email notifications for new digests
+   - UI/UX improvements, dark mode, offline support
+
+8. **Future Enhancements**
+   - Expand to other content sources (RSS, Twitter, etc.)
+   - Voice assistant integration
+   - Multi-user support
+
+---
+
+### Example Digest & Consensus Flow
+
+1. **Fetch** → 2. **Extract (LLM)** → 3. **Split (LLM)** → 4. **Extract Metadata (LLM)** → 5. **Similarity Grouping (LLM/Embeddings + Threshold)** → 6. **Score & Trend Detection** → 7. **Summarize (LLM, now implemented with custom period picker)** → 8. **Store & Retrieve (RAG)** → 9. **Personalize & Rank** → 10. **Display**
+
+---
 
 ## 📋 Setup Instructions
 
@@ -85,6 +220,20 @@ Remember to:
 - **AI**: OpenAI GPT-3.5 for content processing
 - **Email**: Gmail API for newsletter fetching
 - **Authentication**: Supabase Auth with Gmail OAuth
+- **Consensus Feed**: Groups and ranks news by number of unique newsletter mentions, using LLM embeddings and vector search
+- **Newsletter Source Management**: Users can add/remove newsletter senders, only emails from these senders (or matching newsletter heuristics) are processed
+
+## 🆕 How to Use the Consensus Feed and Sources Management
+
+### Consensus/Trending News Feed
+- The consensus feed shows the most-mentioned news items across all your newsletters for a given period.
+- Each card displays the synthesized summary, which newsletters mentioned it, and their comments.
+- To use: render `<ConsensusFeed periodStart={...} periodEnd={...} />` in your main page.
+
+### Newsletter Sources Management UI
+- Users can add, remove, and manage which senders are considered newsletters.
+- To use: render `<NewsletterSourcesManager />` in your settings or main page.
+- Only emails from active sources (or matching newsletter heuristics) are processed.
 
 ## 💰 Cost Estimates
 

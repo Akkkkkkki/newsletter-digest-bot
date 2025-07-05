@@ -1,17 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 
-export default function AuthCallback() {
+// This page only handles Gmail OAuth callback, not Supabase user authentication.
+// User authentication is handled by Supabase Auth elsewhere.
+
+function AuthCallback() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [processing, setProcessing] = useState(true)
+  const [debug, setDebug] = useState<string | null>(null)
 
   useEffect(() => {
     const handleCallback = async () => {
+      // Debug: log full URL and hash
+      if (typeof window !== 'undefined') {
+        const fullUrl = window.location.href
+        const hash = window.location.hash
+        setDebug(`Full URL: ${fullUrl}\nHash: ${hash}`)
+        // If hash contains access_token, show specific error
+        if (hash && hash.includes('access_token')) {
+          setError(
+            'OAuth callback received an access token in the URL fragment (implicit flow). This usually means your Google OAuth app or Supabase project is misconfigured. Please ensure you are using the Authorization Code flow (response_type=code) and not the Implicit flow (response_type=token). See the README for setup instructions.'
+          )
+          setProcessing(false)
+          return
+        }
+      }
+
       const code = searchParams.get('code')
       const error = searchParams.get('error')
 
@@ -43,8 +62,9 @@ export default function AuthCallback() {
 
         const data = await response.json()
 
-        // Store the access token in localStorage
-        localStorage.setItem('gmail_access_token', data.access_token)
+        // Store the access and refresh tokens in localStorage
+        if (data.access_token) localStorage.setItem('gmail_access_token', data.access_token)
+        if (data.refresh_token) localStorage.setItem('gmail_refresh_token', data.refresh_token)
         
         // Redirect back to main page
         router.push('/')
@@ -61,6 +81,9 @@ export default function AuthCallback() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
         <div className="text-center">
+          {debug && (
+            <pre className="text-xs text-gray-400 mb-2 text-left whitespace-pre-wrap overflow-x-auto border border-gray-200 rounded p-2 bg-gray-50">{debug}</pre>
+          )}
           {processing ? (
             <>
               <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
@@ -87,5 +110,13 @@ export default function AuthCallback() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center"><h2 className="text-xl font-semibold mb-2">Loading...</h2></div></div>}>
+      <AuthCallback />
+    </Suspense>
   )
 } 

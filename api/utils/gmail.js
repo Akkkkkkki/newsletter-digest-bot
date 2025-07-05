@@ -1,40 +1,89 @@
 const { google } = require('googleapis');
 
 class GmailService {
-  constructor(accessToken) {
+  constructor(accessToken, refreshToken) {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GMAIL_CLIENT_ID,
       process.env.GMAIL_CLIENT_SECRET
     );
-    this.oauth2Client.setCredentials({ access_token: accessToken });
+    this.oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
     this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
+    this.refreshToken = refreshToken;
   }
 
-  async fetchRecentNewsletters(maxResults = 10) {
+  /**
+   * Fetch recent newsletter emails, filtered by allowed senders/domains and heuristics.
+   * @param {Object} options
+   *   - maxResults: number of emails to fetch
+   *   - allowedSenders: array of allowed sender email addresses (lowercase)
+   *   - allowedDomains: array of allowed sender domains (e.g. 'substack.com')
+   *   - processedMessageIds: array of Gmail message IDs already processed
+   */
+  async fetchRecentNewsletters(options = {}) {
+    const {
+      maxResults = 10,
+      allowedSenders = [],
+      allowedDomains = [],
+      processedMessageIds = [],
+    } = options;
     try {
-      const query = 'newer_than:1d';
-      const response = await this.gmail.users.messages.list({
-        userId: 'me',
-        q: query,
-        maxResults: maxResults
-      });
-
+      // Gmail query: has:list-unsubscribe OR from:allowedSenders OR domain
+      let queryParts = [
+        'has:list-unsubscribe',
+      ];
+      if (allowedSenders.length > 0) {
+        queryParts.push(
+          allowedSenders.map(addr => `from:${addr}`).join(' OR ')
+        );
+      }
+      if (allowedDomains.length > 0) {
+        queryParts.push(
+          allowedDomains.map(domain => `from:@${domain}`).join(' OR ')
+        );
+      }
+      const query = queryParts.join(' OR ');
+      let response;
+      try {
+        response = await this.gmail.users.messages.list({
+          userId: 'me',
+          q: query,
+          maxResults: maxResults * 2 // fetch extra for filtering
+        });
+      } catch (error) {
+        if (error.code === 401 && this.refreshToken) {
+          await this.oauth2Client.getAccessToken();
+          response = await this.gmail.users.messages.list({
+            userId: 'me',
+            q: query,
+            maxResults: maxResults * 2
+          });
+        } else {
+          throw error;
+        }
+      }
       const messages = response.data.messages || [];
       const newsletters = [];
-
-      for (const message of messages.slice(0, 5)) {
+      for (const message of messages) {
+        if (processedMessageIds.includes(message.id)) continue; // skip already processed
         const messageData = await this.gmail.users.messages.get({
           userId: 'me',
           id: message.id,
           format: 'full'
         });
-
         const parsed = this.parseMessage(messageData.data);
-        if (parsed) {
+        if (!parsed) continue;
+        // Heuristic: sender in allowed list or domain, or has List-Unsubscribe header
+        const senderEmail = parsed.senderEmail.toLowerCase();
+        const senderDomain = senderEmail.split('@')[1] || '';
+        const headers = messageData.data.payload.headers || [];
+        const hasListUnsub = headers.some(h => h.name.toLowerCase() === 'list-unsubscribe');
+        const isAllowedSender = allowedSenders.includes(senderEmail);
+        const isAllowedDomain = allowedDomains.some(domain => senderDomain.endsWith(domain));
+        if (isAllowedSender || isAllowedDomain || hasListUnsub) {
           newsletters.push(parsed);
         }
+        if (newsletters.length >= maxResults) break;
       }
-
       return newsletters;
     } catch (error) {
       console.error('Gmail API error:', error);

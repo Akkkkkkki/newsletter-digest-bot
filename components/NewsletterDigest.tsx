@@ -2,22 +2,57 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { useNewsletters } from '@/hooks/useNewsletters'
+import { useNewsletters, useDigestSummary } from '@/hooks/useNewsletters'
 import { Mail, RefreshCw, Calendar, Tag, TrendingUp, Link2, Users, Building2, CheckCircle } from 'lucide-react'
 import type { Newsletter } from '@/lib/types'
 
 export default function NewsletterDigest() {
-  const { user } = useAuth()
-  const { newsletters, loading, error, fetchNewsletters, processNewsletters } = useNewsletters()
+  const { user, connectGmail } = useAuth()
+  const { newsletters, loading, error, fetchNewsletters, processNewsletters } = useNewsletters() as ReturnType<typeof useNewsletters> & { processNewsletters: (userId: string, accessToken: string, refreshToken?: string) => Promise<any> }
   const [processing, setProcessing] = useState(false)
   const [gmailToken, setGmailToken] = useState<string | null>(null)
+  const [gmailRefreshToken, setGmailRefreshToken] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Digest summary hook
+  const { digest, loading: digestLoading, error: digestError, fetchDigestSummary } = useDigestSummary()
+
+  // Date range state for digest
+  const today = new Date()
+  const defaultEnd = today.toISOString().slice(0, 10)
+  const defaultStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const [periodStart, setPeriodStart] = useState<string>(defaultStart)
+  const [periodEnd, setPeriodEnd] = useState<string>(defaultEnd)
+
+  // Reset to default when user logs in/out
+  useEffect(() => {
+    setPeriodStart(defaultStart)
+    setPeriodEnd(defaultEnd)
+    if (user) {
+      fetchDigestSummary(user.id, new Date(defaultStart), new Date(defaultEnd))
+    }
+  }, [user])
+
+  // Handler for custom period fetch
+  const handleFetchDigest = () => {
+    if (user) {
+      fetchDigestSummary(user.id, new Date(periodStart), new Date(periodEnd))
+    }
+  }
 
   useEffect(() => {
     if (user) {
       fetchNewsletters(user.id)
     }
   }, [user])
+
+  useEffect(() => {
+    // Load Gmail tokens from localStorage on mount
+    const accessToken = localStorage.getItem('gmail_access_token')
+    const refreshToken = localStorage.getItem('gmail_refresh_token')
+    if (accessToken) setGmailToken(accessToken)
+    if (refreshToken) setGmailRefreshToken(refreshToken)
+  }, [])
 
   const handleGmailAuth = () => {
     const clientId = process.env.NEXT_PUBLIC_GMAIL_CLIENT_ID
@@ -40,12 +75,21 @@ export default function NewsletterDigest() {
 
     setProcessing(true)
     try {
-      await processNewsletters(user.id, gmailToken)
+      const refreshToken = localStorage.getItem('gmail_refresh_token')
+      await processNewsletters(user.id, gmailToken, refreshToken || undefined)
     } catch (err) {
       console.error('Error processing newsletters:', err)
     } finally {
       setProcessing(false)
     }
+  }
+
+  // Optionally, allow disconnecting Gmail
+  const handleDisconnectGmail = () => {
+    localStorage.removeItem('gmail_access_token')
+    localStorage.removeItem('gmail_refresh_token')
+    setGmailToken(null)
+    setGmailRefreshToken(null)
   }
 
   const filteredNewsletters = selectedCategory
@@ -74,13 +118,87 @@ export default function NewsletterDigest() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Digest Period Picker */}
+      {user && (
+        <div className="flex flex-wrap items-end gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={periodStart}
+              max={periodEnd}
+              onChange={e => setPeriodStart(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input
+              type="date"
+              value={periodEnd}
+              min={periodStart}
+              max={defaultEnd}
+              onChange={e => setPeriodEnd(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
+          <button
+            onClick={handleFetchDigest}
+            disabled={digestLoading || !user}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {digestLoading ? 'Loading...' : 'Fetch Digest'}
+          </button>
+          <span className="text-gray-500 text-sm ml-2">Showing: {periodStart} to {periodEnd}</span>
+        </div>
+      )}
+      {/* Digest Summary Section */}
+      {user && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+          <h2 className="text-2xl font-bold mb-2">Your Digest</h2>
+          {digestLoading && <div className="text-blue-600">Generating digest summary...</div>}
+          {digestError && <div className="text-red-600">{digestError}</div>}
+          {digest && (
+            <>
+              <p className="text-lg text-gray-800 mb-3">{digest.summary_content}</p>
+              <div className="flex flex-wrap gap-4 mb-2">
+                <div>
+                  <h4 className="font-semibold text-gray-600">Top Topics</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {digest.top_topics.map((topic, i) => (
+                      <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">{topic}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-600">Key Insights</h4>
+                  <ul className="list-disc list-inside text-sm text-gray-700">
+                    {digest.key_insights.map((insight, i) => (
+                      <li key={i}>{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-600">Sentiment</h4>
+                  <div className="flex gap-2 text-sm">
+                    <span className="text-green-600">Positive: {digest.sentiment_analysis.positive}</span>
+                    <span className="text-gray-600">Neutral: {digest.sentiment_analysis.neutral}</span>
+                    <span className="text-red-600">Negative: {digest.sentiment_analysis.negative}</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Header Actions */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Newsletter Digest</h1>
         <div className="flex gap-3">
           {!gmailToken && (
             <button
-              onClick={handleGmailAuth}
+              onClick={connectGmail}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
             >
               <Mail className="w-4 h-4" />
@@ -88,14 +206,22 @@ export default function NewsletterDigest() {
             </button>
           )}
           {gmailToken && (
-            <button
-              onClick={handleProcessNewsletters}
-              disabled={processing}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${processing ? 'animate-spin' : ''}`} />
-              {processing ? 'Processing...' : 'Fetch New Newsletters'}
-            </button>
+            <>
+              <button
+                onClick={handleProcessNewsletters}
+                disabled={processing}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${processing ? 'animate-spin' : ''}`} />
+                {processing ? 'Processing...' : 'Fetch New Newsletters'}
+              </button>
+              <button
+                onClick={handleDisconnectGmail}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Disconnect Gmail
+              </button>
+            </>
           )}
         </div>
       </div>

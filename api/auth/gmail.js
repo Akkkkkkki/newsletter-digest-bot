@@ -1,8 +1,30 @@
 const { google } = require('googleapis');
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Defensive: Check for required env vars
+  const clientId = process.env.GMAIL_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+  const redirectUri = process.env.NODE_ENV === 'production'
+    ? 'https://newsletter-digest-bot.vercel.app/auth/callback'
+    : 'http://localhost:3000/auth/callback';
+
+  if (!clientId || !clientSecret) {
+    console.error('[GMAIL OAUTH] Missing env vars:', {
+      GMAIL_CLIENT_ID: !!clientId,
+      GMAIL_CLIENT_SECRET: !!clientSecret
+    });
+    return res.status(500).json({
+      error: 'Missing required environment variables',
+      details: {
+        GMAIL_CLIENT_ID: !!clientId,
+        GMAIL_CLIENT_SECRET: !!clientSecret
+      },
+      hint: 'Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in your Vercel project environment variables.'
+    });
   }
 
   try {
@@ -13,14 +35,23 @@ export default async function handler(req, res) {
     }
 
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GMAIL_CLIENT_ID,
-      process.env.GMAIL_CLIENT_SECRET,
-      process.env.NODE_ENV === 'production' 
-        ? 'https://your-app.vercel.app/auth/callback'
-        : 'http://localhost:3000/auth/callback'
+      clientId,
+      clientSecret,
+      redirectUri
     );
 
-    const { tokens } = await oauth2Client.getToken(code);
+    let tokens;
+    try {
+      const result = await oauth2Client.getToken(code);
+      tokens = result.tokens;
+    } catch (tokenError) {
+      console.error('OAuth token exchange error:', tokenError?.response?.data || tokenError);
+      return res.status(500).json({
+        error: 'OAuth token exchange failed',
+        details: tokenError?.response?.data || tokenError.message || tokenError,
+        hint: 'Check that your GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and redirect URI match exactly between your code, Vercel environment, and Google Cloud Console.'
+      });
+    }
 
     return res.status(200).json({
       access_token: tokens.access_token,
@@ -30,6 +61,8 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('OAuth error:', error);
-    return res.status(500).json({ error: 'Authentication failed' });
+    return res.status(500).json({ error: 'Authentication failed', details: error.message || error });
   }
-} 
+}
+
+module.exports = handler; 

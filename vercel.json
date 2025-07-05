@@ -1,21 +1,4 @@
 {
-  "name": "newsletter-digest-bot",
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "env": {
-    "SUPABASE_URL": "supabase_url",
-    "SUPABASE_ANON_KEY": "supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY": "supabase_service_role_key",
-    "OPENAI_API_KEY": "openai_api_key",
-    "GMAIL_CLIENT_ID": "gmail_client_id",
-    "GMAIL_CLIENT_SECRET": "gmail_client_secret"
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" }
-  ]
+  "framework": "nextjs"
 } 
