@@ -6,23 +6,28 @@ interface UseNewslettersOptions {
   daysBack?: number
   limit?: number
   category?: string
+  startDate?: string
+  endDate?: string
 }
 
-export const useNewsletters = (options: UseNewslettersOptions = {}) => {
+export const useNewsletters = (defaultOptions: UseNewslettersOptions = {}) => {
   const [newsletters, setNewsletters] = useState<Newsletter[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchNewsletters = async (userId: string) => {
+  const fetchNewsletters = async (userId: string, optionsOverride: UseNewslettersOptions = {}) => {
     setLoading(true)
     setError(null)
 
     try {
+      const mergedOptions = { ...defaultOptions, ...optionsOverride }
       const params = new URLSearchParams({
         user_id: userId,
-        days_back: (options.daysBack || 7).toString(),
-        limit: (options.limit || 20).toString(),
-        ...(options.category && { category: options.category })
+        days_back: (mergedOptions.daysBack || 7).toString(),
+        limit: (mergedOptions.limit || 20).toString(),
+        ...(mergedOptions.category && { category: mergedOptions.category }),
+        ...(mergedOptions.startDate && { start_date: mergedOptions.startDate }),
+        ...(mergedOptions.endDate && { end_date: mergedOptions.endDate })
       })
 
       const response = await fetch(`/api/newsletters?${params}`)

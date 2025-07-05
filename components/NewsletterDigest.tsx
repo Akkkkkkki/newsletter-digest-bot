@@ -13,11 +13,15 @@ export default function NewsletterDigest() {
   const [gmailToken, setGmailToken] = useState<string | null>(null)
   const [gmailRefreshToken, setGmailRefreshToken] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [newsletterLimit, setNewsletterLimit] = useState<number>(20)
+  const [newsletterDaysBack, setNewsletterDaysBack] = useState<number>(7)
+  const [newsletterStartDate, setNewsletterStartDate] = useState<string>("")
+  const [newsletterEndDate, setNewsletterEndDate] = useState<string>("")
 
   // Digest summary hook
   const { digest, loading: digestLoading, error: digestError, fetchDigestSummary } = useDigestSummary()
 
-  // Date range state for digest
+  // Unified date range state for both digest and newsletter list
   const today = new Date()
   const defaultEnd = today.toISOString().slice(0, 10)
   const defaultStart = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -33,16 +37,36 @@ export default function NewsletterDigest() {
     }
   }, [user])
 
-  // Handler for custom period fetch
-  const handleFetchDigest = () => {
-    if (user) {
-      fetchDigestSummary(user.id, new Date(periodStart), new Date(periodEnd))
+  // Unified fetch: fetch new emails (if Gmail connected) and update list/digest
+  const handleUnifiedFetch = async () => {
+    if (!user) return
+    setProcessing(true)
+    try {
+      if (gmailToken) {
+        const refreshToken = localStorage.getItem('gmail_refresh_token')
+        await processNewsletters(user.id, gmailToken, refreshToken || undefined)
+      }
+      await fetchNewsletters(user.id, {
+        limit: newsletterLimit,
+        startDate: periodStart,
+        endDate: periodEnd
+      })
+      await fetchDigestSummary(user.id, new Date(periodStart), new Date(periodEnd))
+    } catch (err) {
+      console.error('Error during unified fetch:', err)
+    } finally {
+      setProcessing(false)
     }
   }
 
   useEffect(() => {
     if (user) {
-      fetchNewsletters(user.id)
+      fetchNewsletters(user.id, {
+        limit: newsletterLimit,
+        startDate: periodStart,
+        endDate: periodEnd
+      })
+      fetchDigestSummary(user.id, new Date(periodStart), new Date(periodEnd))
     }
   }, [user])
 
@@ -118,40 +142,51 @@ export default function NewsletterDigest() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Digest Period Picker */}
-      {user && (
-        <div className="flex flex-wrap items-end gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={periodStart}
-              max={periodEnd}
-              onChange={e => setPeriodStart(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-            <input
-              type="date"
-              value={periodEnd}
-              min={periodStart}
-              max={defaultEnd}
-              onChange={e => setPeriodEnd(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-          </div>
-          <button
-            onClick={handleFetchDigest}
-            disabled={digestLoading || !user}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {digestLoading ? 'Loading...' : 'Fetch Digest'}
-          </button>
-          <span className="text-gray-500 text-sm ml-2">Showing: {periodStart} to {periodEnd}</span>
+      {/* Unified Date Range and Fetch Controls */}
+      <div className="flex flex-wrap items-end gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+          <input
+            type="date"
+            value={periodStart}
+            max={periodEnd}
+            onChange={e => setPeriodStart(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
         </div>
-      )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+          <input
+            type="date"
+            value={periodEnd}
+            min={periodStart}
+            max={defaultEnd}
+            onChange={e => setPeriodEnd(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">How many newsletters to display?</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={newsletterLimit}
+            onChange={e => setNewsletterLimit(Number(e.target.value))}
+            className="border rounded px-2 py-1 w-24"
+          />
+        </div>
+        <button
+          onClick={handleUnifiedFetch}
+          disabled={processing || !user}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {processing
+            ? (gmailToken ? 'Fetching & Processing...' : 'Fetching...')
+            : (gmailToken ? 'Fetch New Newsletters & Update View' : 'Fetch & Update View')}
+        </button>
+        <span className="text-gray-500 text-sm ml-2">Showing: {periodStart} to {periodEnd}</span>
+      </div>
       {/* Digest Summary Section */}
       {user && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">

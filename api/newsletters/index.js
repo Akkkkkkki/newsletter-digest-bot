@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { user_id, limit = 20, days_back = 7, category } = req.query;
+    const { user_id, limit = 20, days_back = 7, category, start_date, end_date } = req.query;
 
     if (!user_id) {
       return res.status(400).json({ error: 'User ID required' });
@@ -32,14 +32,21 @@ export default async function handler(req, res) {
           links_extracted
         )
       `)
-      .eq('user_id', user_id)
-      .gte('received_date', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
-      .order('received_date', { ascending: false })
-      .limit(parseInt(limit));
+      .eq('user_id', user_id);
+
+    if (start_date && end_date) {
+      query = query.gte('received_date', new Date(start_date).toISOString())
+                   .lte('received_date', new Date(end_date).toISOString());
+    } else {
+      query = query.gte('received_date', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
+    }
 
     if (category) {
       query = query.eq('newsletter_insights.category', category);
     }
+
+    query = query.order('received_date', { ascending: false })
+                 .limit(parseInt(limit));
 
     const { data: newsletters, error } = await query;
 
