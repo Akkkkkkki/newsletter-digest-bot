@@ -256,3 +256,55 @@ Remember to:
 ## 📝 License
 
 MIT License - see LICENSE file for details.
+
+## ✉️ Allowed Sender Management (NEW)
+
+You can now control which sender email addresses or domains are allowed for newsletter processing, directly from the UI.
+
+### Features
+- **Add/Remove Allowed Senders:**
+  - Add a full email (e.g. `editor@newsletter.com`) or a domain (e.g. `substack.com`).
+  - Remove senders with a single click.
+- **Input Validation:**
+  - Only valid email addresses or domains are accepted.
+  - Prevents duplicates.
+  - Inline error messages and input highlighting for invalid input.
+- **Enhanced List Display:**
+  - Email icon for full email addresses, globe icon for domains.
+  - Displays the source name (if available) next to the address/domain.
+- **Backend API:**
+  - New endpoint: `/api/newsletters/sources` (GET, POST, DELETE)
+  - Supports listing, adding, and removing allowed senders for the authenticated user.
+- **React Hook:**
+  - `useNewsletterSources(userId)` for fetching, adding, and removing allowed senders.
+
+### Example UI
+```
++---------------------------------------------+
+| Allowed Senders                            |
+| Only newsletters from these senders will... |
+|                                             |
+| [📧] editor@newsletter.com   (Remove)        |
+| [🌐] substack.com            (Remove)        |
+|                                             |
+| + Add new sender: [______________] [Add]    |
+|   [Error: Please enter a valid ...]         |
++---------------------------------------------+
+```
+
+### API Usage
+- **GET** `/api/newsletters/sources?user_id=...` — List allowed senders
+- **POST** `/api/newsletters/sources` — Add sender `{ user_id, email_address }`
+- **DELETE** `/api/newsletters/sources` — Remove sender `{ user_id, email_address }`
+
+See the UI in the "Allowed Senders" section at the top of the main digest page.
+
+## 📝 Recent Changes
+
+### News Item Extraction Improvements (July 2025)
+- The news item extraction algorithm (see `api/utils/openai.js`) has been refined for higher accuracy:
+  - **Reduces over-segmentation:** Now groups together only sections that are about the same event, announcement, or story, rather than splitting similar content into multiple items.
+  - **Avoids over-generalization:** Items about different companies, products, or people (even if similar in theme) are kept as separate news items.
+  - **Leverages formatting cues:** The extraction prompt now instructs the AI to use headings, bullet points, dividers, and section breaks as signals for where one news item ends and another begins.
+  - **Balances grouping and splitting:** If in doubt, the model is told to keep items separate unless it is clear they are about the same specific news.
+- These changes improve the quality and relevance of extracted news items, especially for newsletters with multiple sections on similar topics.
