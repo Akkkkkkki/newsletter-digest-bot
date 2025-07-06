@@ -1,7 +1,5 @@
 # Newsletter Digest Bot
 
-**⚡️ This product operates at the individual news item level: Each newsletter email is parsed, all news items (articles, tools, reports, etc.) are extracted and stored as separate records. All analysis, grouping, and trending logic is performed on these news items, not on the emails themselves.**
-
 ## 🚧 Development Progress
 
 - [x] Gmail OAuth integration and newsletter fetching
@@ -27,6 +25,10 @@ AI-powered newsletter digest assistant that connects to Gmail, processes newslet
 - 🗂️ **Newsletter sources management UI**: Add/remove newsletter senders you want to follow
 - 📱 Responsive web interface
 - 🚀 Serverless deployment on Vercel
+- **Semantic Grouping (NEW):**
+  - News items are grouped using vector similarity (semantic embeddings) for more accurate consensus.
+  - Grouping parameters (similarity threshold, max per query) are configurable in `lib/config.js` and adjustable in the UI.
+  - Users can manually trigger grouping and adjust thresholds for stricter or looser grouping.
 
 ## 🧭 Product Requirements Document (PRD)
 
@@ -171,9 +173,10 @@ npm install
 
 ### 3. Set up Supabase
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Go to SQL Editor and run the migration in `supabase/migrations/20250706_new_news_item_schema.sql` (this creates the news_items table and related indexes/policies)
+2. Go to SQL Editor and run the migration in `supabase/schema.sql` (this creates the news_items table and related indexes/policies)
 3. Get your project URL and anon key from Settings > API
 4. Enable Google OAuth in Authentication > Providers
+5. **Enable the `pgvector` extension and create the `match_news_items` function for vector similarity search.**
 
 ### 4. Set up OpenAI
 1. Get API key from [platform.openai.com](https://platform.openai.com)
@@ -310,3 +313,28 @@ See the UI in the "Allowed Senders" section at the top of the main digest page.
   - **Leverages formatting cues:** The extraction prompt now instructs the AI to use headings, bullet points, dividers, and section breaks as signals for where one news item ends and another begins.
   - **Balances grouping and splitting:** If in doubt, the model is told to keep items separate unless it is clear they are about the same specific news.
 - These changes improve the quality and relevance of extracted news items, especially for newsletters with multiple sections on similar topics.
+
+## ⚙️ Configuration
+
+All key parameters for consensus grouping and extraction are set in `lib/config.js`:
+
+```js
+const CONSENSUS_DEFAULTS = {
+  minMentions: 2, // Minimum number of mentions to form a group
+  similarityThreshold: 0.85, // Default similarity threshold for semantic grouping
+  maxPerQuery: 20,           // Max similar items to fetch per query embedding
+};
+```
+
+You can override these defaults in the UI when grouping news items.
+
+## 🖥️ Using the Semantic Grouping UI
+
+- On the trending/consensus feed, use the **"Group Similar News"** button to manually trigger semantic grouping.
+- Adjust the **Similarity Threshold** (higher = stricter, lower = looser grouping) and **Max Per Query** (controls group size) as needed.
+- Groups are ranked by relevance (mentions, importance, confidence) and show which newsletters mentioned each item.
+
+## 📝 Notes
+- All grouping and ranking logic is config-driven and can be tuned in `lib/config.js`.
+- No overengineering: grouping is performed using a simple, efficient vector similarity search and clustering pipeline.
+- All UI controls are intuitive and mobile-friendly.
