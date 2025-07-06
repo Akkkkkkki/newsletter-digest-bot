@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 
 class GmailService {
   constructor(accessToken, refreshToken) {
@@ -21,9 +22,9 @@ class GmailService {
    */
   async fetchRecentNewsletters(options = {}) {
     const {
-      maxResults = 10,
+      maxResults = NEWSLETTER_DEFAULTS.limit,
       allowedSenders = [],
-      allowedDomains = [],
+      allowedDomains = NEWSLETTER_DEFAULTS.allowedDomains,
       processedMessageIds = [],
     } = options;
     try {

@@ -15,33 +15,28 @@ export default async function handler(req, res) {
     const end = period_end ? new Date(period_end) : new Date();
     const start = period_start ? new Date(period_start) : new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Fetch all completed newsletters and their insights for the user in the period
-    const { data: newsletters, error } = await supabase
-      .from('newsletters')
-      .select(`id, received_date, newsletter_insights(*)`)
+    // Fetch all news items for the user in the period
+    const { data: news_items, error } = await supabase
+      .from('news_items')
+      .select('*')
       .eq('user_id', user_id)
-      .eq('status', 'completed')
-      .gte('received_date', start.toISOString())
-      .lte('received_date', end.toISOString());
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
 
     if (error) {
       console.error('Database error:', error);
       return res.status(500).json({ error: 'Database query failed' });
     }
 
-    const insights = (newsletters || [])
-      .map(n => n.newsletter_insights)
-      .filter(Boolean);
-
-    if (insights.length === 0) {
+    if (!news_items || news_items.length === 0) {
       return res.status(200).json({
-        message: 'No newsletters found for this period.',
+        message: 'No news items found for this period.',
         digest: null
       });
     }
 
     // Synthesize digest summary
-    const digest = await synthesizeDigestSummary(insights);
+    const digest = await synthesizeDigestSummary(news_items);
 
     // Upsert into digest_summaries
     const { data: upserted, error: upsertError } = await supabase
@@ -50,7 +45,7 @@ export default async function handler(req, res) {
         user_id,
         period_start: start.toISOString(),
         period_end: end.toISOString(),
-        newsletter_count: insights.length,
+        newsletter_count: news_items.length,
         top_topics: digest.top_topics,
         key_insights: digest.key_insights,
         summary_content: digest.summary_content,

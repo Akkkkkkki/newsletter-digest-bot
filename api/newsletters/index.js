@@ -1,4 +1,5 @@
 const { supabase } = require('../utils/supabase');
+const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,49 +7,59 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { user_id, limit = 20, days_back = 7, category, start_date, end_date } = req.query;
+    const { user_id, limit = NEWSLETTER_DEFAULTS.limit, days_back = NEWSLETTER_DEFAULTS.daysBack, category, start_date, end_date } = req.query;
 
     if (!user_id) {
       return res.status(400).json({ error: 'User ID required' });
     }
 
     let query = supabase
-      .from('newsletters')
+      .from('news_items')
       .select(`
         id,
-        subject,
-        sender_name,
-        sender_email,
-        received_date,
-        status,
-        newsletter_insights (
-          summary,
-          key_topics,
-          sentiment,
-          category,
-          companies_mentioned,
-          people_mentioned,
-          action_items,
-          links_extracted
+        title,
+        summary,
+        content,
+        url,
+        position,
+        topics,
+        people_mentioned,
+        products_mentioned,
+        companies_mentioned,
+        events_mentioned,
+        sentiment,
+        importance_score,
+        extraction_model,
+        confidence_score,
+        created_at,
+        updated_at,
+        newsletter_id,
+        user_id,
+        source_id,
+        newsletters:newsletter_id (
+          subject,
+          sender_name,
+          sender_email,
+          received_date
         )
       `)
       .eq('user_id', user_id);
 
     if (start_date && end_date) {
-      query = query.gte('received_date', new Date(start_date).toISOString())
-                   .lte('received_date', new Date(end_date).toISOString());
+      query = query.gte('created_at', new Date(start_date).toISOString())
+                   .lte('created_at', new Date(end_date).toISOString());
     } else {
-      query = query.gte('received_date', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
+      query = query.gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
     }
 
     if (category) {
-      query = query.eq('newsletter_insights.category', category);
+      query = query.contains('topics', [category]);
     }
 
-    query = query.order('received_date', { ascending: false })
+    query = query.order('created_at', { ascending: false })
                  .limit(parseInt(limit));
 
-    const { data: newsletters, error } = await query;
+    const { data: news_items, error } = await query;
 
     if (error) {
       console.error('Database error:', error);
@@ -56,8 +67,8 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      newsletters: newsletters || [],
-      count: newsletters?.length || 0
+      news_items: news_items || [],
+      count: news_items?.length || 0
     });
 
   } catch (error) {

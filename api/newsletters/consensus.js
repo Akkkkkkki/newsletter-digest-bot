@@ -1,30 +1,18 @@
 const { supabase } = require('../../utils/supabase');
+const { CONSENSUS_DEFAULTS } = require('../../lib/config');
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const { user_id, period_start, period_end, min_mentions = 2 } = req.query;
+  const { user_id, period_start, period_end, min_mentions = CONSENSUS_DEFAULTS.minMentions } = req.query;
   if (!user_id) return res.status(400).json({ error: 'User ID required' });
   if (!period_start || !period_end) return res.status(400).json({ error: 'Period start and end required' });
 
-  // 1. Find all groups for this user in the period
-  const { data: groups, error } = await supabase
-    .from('newsletter_similarity_groups')
+  // Fetch all news items for the user in the period
+  const { data: news_items, error } = await supabase
+    .from('news_items')
     .select(`
-      id,
-      representative_summary,
-      created_at,
-      newsletter_group_membership (
-        similarity_score,
-        newsletter_insights (
-          summary,
-          newsletter_id,
-          newsletter (
-            subject,
-            sender_name,
-            sender_email,
-            received_date
-          )
-        )
+      id, title, summary, newsletter_id, created_at, newsletters:newsletter_id (
+        subject, sender_name, sender_email, received_date
       )
     `)
     .eq('user_id', user_id)
@@ -33,26 +21,34 @@ export default async function handler(req, res) {
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // 2. Filter and sort by number of unique newsletters
-  const consensus = (groups || [])
-    .map(group => {
-      const mentions = (group.newsletter_group_membership || [])
-        .filter(m => m.newsletter_insights && m.newsletter_insights.newsletter)
-        .map(m => ({
-          summary: m.newsletter_insights.summary,
-          subject: m.newsletter_insights.newsletter.subject,
-          sender_name: m.newsletter_insights.newsletter.sender_name,
-          sender_email: m.newsletter_insights.newsletter.sender_email,
-          received_date: m.newsletter_insights.newsletter.received_date,
-          similarity_score: m.similarity_score
-        }));
-      return {
-        group_id: group.id,
-        summary: group.representative_summary,
-        mentions,
-        mention_count: mentions.length
+  // Group by identical title (proxy for similarity)
+  const groups = {};
+  for (const item of news_items || []) {
+    const key = item.title.trim().toLowerCase();
+    if (!groups[key]) {
+      groups[key] = {
+        title: item.title,
+        summary: item.summary,
+        mentions: [],
       };
-    })
+    }
+    groups[key].mentions.push({
+      newsletter_id: item.newsletter_id,
+      sender_name: item.newsletters?.sender_name,
+      sender_email: item.newsletters?.sender_email,
+      received_date: item.newsletters?.received_date,
+      subject: item.newsletters?.subject,
+    });
+  }
+
+  // Convert to array and filter by min_mentions
+  const consensus = Object.values(groups)
+    .map(group => ({
+      title: group.title,
+      summary: group.summary,
+      mentions: group.mentions,
+      mention_count: group.mentions.length
+    }))
     .filter(g => g.mention_count >= min_mentions)
     .sort((a, b) => b.mention_count - a.mention_count);
 

@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/useAuth"
+import { CONSENSUS_DEFAULTS } from '@/lib/config'
 
 export default function ConsensusFeed({ periodStart, periodEnd }: { periodStart: string, periodEnd: string }) {
   const { user } = useAuth()

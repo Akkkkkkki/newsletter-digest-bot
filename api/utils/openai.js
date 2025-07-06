@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { OPENAI_DEFAULTS } = require('../../lib/config');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -36,10 +37,10 @@ Return ONLY valid JSON in this exact format:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: OPENAI_DEFAULTS.model,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 1000
+      temperature: OPENAI_DEFAULTS.temperature,
+      max_tokens: OPENAI_DEFAULTS.maxTokens
     });
 
     return JSON.parse(response.choices[0].message.content);
@@ -89,10 +90,10 @@ async function synthesizeDigestSummary(insights) {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: OPENAI_DEFAULTS.model,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 1000
+      temperature: OPENAI_DEFAULTS.temperature,
+      max_tokens: OPENAI_DEFAULTS.maxTokens
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
@@ -106,4 +107,73 @@ async function synthesizeDigestSummary(insights) {
   }
 }
 
-module.exports = { extractNewsletterInsights, generateEmbedding, synthesizeDigestSummary }; 
+/**
+ * Extracts all individual news items from a newsletter email using OpenAI.
+ * Returns an array of news item objects, each with metadata for storage in the news_items table.
+ * @param {string} content - The raw newsletter content.
+ * @param {string} senderInfo - The sender's name and email.
+ * @returns {Promise<Array>} - Array of news item objects.
+ */
+async function extractNewsItemsFromNewsletter(content, senderInfo) {
+  const prompt = `
+You are an expert at parsing newsletters. Given the following newsletter content, extract ALL individual news items (articles, tools, reports, etc.) and return a JSON array. For each news item, extract:
+- title (required)
+- summary (2-3 sentences, required)
+- content (full text of the news item, if available)
+- url (if present)
+- topics (array of main topics/themes)
+- people_mentioned (array)
+- products_mentioned (array)
+- companies_mentioned (array)
+- events_mentioned (array or JSON)
+- sentiment (positive/neutral/negative)
+- importance_score (0-1, estimate how important/relevant this item is)
+- confidence_score (0-1, how confident are you in the extraction)
+
+Newsletter from: ${senderInfo}
+Content: ${content.substring(0, 6000)}
+
+Extraction instructions:
+- Group together sections ONLY if they are about the same event, announcement, or story. Do NOT merge items that are about different companies, products, or people, even if the topics are similar (e.g., "OpenAI released X" and "Anthropic released Y" should be separate items).
+- Pay close attention to formatting cues such as headings, bullet points, dividers, or section breaks. Use these as indicators for where one news item ends and another begins.
+- If in doubt, prefer to keep items separate unless it is clear they are about the same specific news.
+- Prefer fewer, more comprehensive news items over many fragmented ones, but do not over-generalize or merge unrelated news.
+
+Return ONLY valid JSON in this format:
+[
+  {
+    "title": "...",
+    "summary": "...",
+    "content": "...",
+    "url": "...",
+    "topics": ["topic1", "topic2"],
+    "people_mentioned": ["person1", "person2"],
+    "products_mentioned": ["product1", "product2"],
+    "companies_mentioned": ["company1", "company2"],
+    "events_mentioned": [],
+    "sentiment": "positive/neutral/negative",
+    "importance_score": 0.8,
+    "confidence_score": 0.9
+  }
+]
+`;
+  try {
+    const response = await openai.chat.completions.create({
+      model: OPENAI_DEFAULTS.model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: OPENAI_DEFAULTS.temperature,
+      max_tokens: Math.max(OPENAI_DEFAULTS.maxTokens, 1500)
+    });
+    let items = JSON.parse(response.choices[0].message.content);
+    // Add extraction_model to each item
+    if (Array.isArray(items)) {
+      items = items.map(item => ({ ...item, extraction_model: OPENAI_DEFAULTS.model }));
+    }
+    return items;
+  } catch (error) {
+    console.error('OpenAI news item extraction error:', error);
+    return [];
+  }
+}
+
+module.exports = { extractNewsletterInsights, generateEmbedding, synthesizeDigestSummary, extractNewsItemsFromNewsletter }; 

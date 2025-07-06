@@ -1,6 +1,8 @@
 const { supabase } = require('../utils/supabase');
 const { GmailService } = require('../utils/gmail');
-const { extractNewsletterInsights, generateEmbedding } = require('../utils/openai');
+const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../utils/openai');
+const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
+const { NEWSLETTER_DEFAULTS: CONFIG_DEFAULTS } = require('../../lib/config');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -28,7 +30,7 @@ export default async function handler(req, res) {
     }
     const allowedSenders = (sources || []).map(s => s.email_address.toLowerCase());
     // Optionally, allow some default domains (e.g., substack.com)
-    const allowedDomains = ['substack.com', 'deeplearning.ai'];
+    const allowedDomains = CONFIG_DEFAULTS.allowedDomains;
     // Fetch already-processed Gmail message IDs for this user
     const { data: processed, error: processedError } = await supabase
       .from('newsletters')
@@ -40,7 +42,7 @@ export default async function handler(req, res) {
     const processedMessageIds = (processed || []).map(n => n.gmail_message_id);
     // Fetch recent newsletters with filtering
     const newsletters = await gmailService.fetchRecentNewsletters({
-      maxResults: 10,
+      maxResults: CONFIG_DEFAULTS.limit,
       allowedSenders,
       allowedDomains,
       processedMessageIds
@@ -85,86 +87,37 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Extract insights using OpenAI
+        // Extract all news items from the newsletter
         const senderInfo = `${newsletter.senderName} <${newsletter.senderEmail}>`;
-        const insights = await extractNewsletterInsights(newsletter.content, senderInfo);
+        const newsItems = await extractNewsItemsFromNewsletter(newsletter.content, senderInfo);
 
-        // Insert insights
-        const { data: insertedInsight, error: insightsError } = await supabase
-          .from('newsletter_insights')
-          .insert({
-            newsletter_id: insertedNewsletter.id,
-            summary: insights.summary,
-            key_topics: insights.key_topics,
-            sentiment: insights.sentiment,
-            category: insights.category,
-            companies_mentioned: insights.companies_mentioned,
-            people_mentioned: insights.people_mentioned,
-            action_items: insights.action_items,
-            links_extracted: insights.links_extracted,
-            extraction_model: 'gpt-3.5-turbo'
-          })
-          .select()
-          .single();
-
-        if (insightsError) {
-          console.error('Error inserting insights:', insightsError);
-        } else if (insertedInsight) {
-          // Generate embedding for the summary
-          const embedding = await generateEmbedding(insights.summary);
-          if (embedding) {
-            // Store embedding in newsletter_insights
-            await supabase
-              .from('newsletter_insights')
-              .update({ embedding })
-              .eq('id', insertedInsight.id);
-
-            // Similarity grouping logic
-            // 1. Find existing groups for this user with cosine similarity > 0.85
-            const { data: groups } = await supabase
-              .rpc('match_similarity_groups', {
-                user_id: user_id,
-                embedding: embedding,
-                threshold: 0.85
-              });
-
-            let groupId = null;
-            if (groups && groups.length > 0) {
-              // Use the most similar group
-              groupId = groups[0].id;
-              // Add to group membership
-              await supabase
-                .from('newsletter_group_membership')
-                .insert({
-                  group_id: groupId,
-                  newsletter_insight_id: insertedInsight.id,
-                  similarity_score: groups[0].similarity
-                });
-              // Optionally: update group embedding (average of all member embeddings)
-              // (Not implemented here for brevity)
-            } else {
-              // Create new group
-              const { data: newGroup } = await supabase
-                .from('newsletter_similarity_groups')
-                .insert({
-                  user_id: user_id,
-                  group_embedding: embedding,
-                  representative_summary: insights.summary
-                })
-                .select()
-                .single();
-              if (newGroup) {
-                groupId = newGroup.id;
-                await supabase
-                  .from('newsletter_group_membership')
-                  .insert({
-                    group_id: groupId,
-                    newsletter_insight_id: insertedInsight.id,
-                    similarity_score: 1.0
-                  });
-              }
-            }
-          }
+        // Insert each news item into news_items table
+        for (let i = 0; i < newsItems.length; i++) {
+          const item = newsItems[i];
+          // Generate embedding for the news item (use summary or content)
+          const embedding = await generateEmbedding(item.summary || item.content || item.title);
+          await supabase
+            .from('news_items')
+            .insert({
+              newsletter_id: insertedNewsletter.id,
+              user_id: user_id,
+              source_id: null, // Optionally resolve source_id if needed
+              title: item.title,
+              summary: item.summary,
+              content: item.content,
+              url: item.url,
+              position: i,
+              embedding: embedding,
+              topics: item.topics || [],
+              people_mentioned: item.people_mentioned || [],
+              products_mentioned: item.products_mentioned || [],
+              companies_mentioned: item.companies_mentioned || [],
+              events_mentioned: item.events_mentioned || [],
+              sentiment: item.sentiment,
+              importance_score: item.importance_score || 0.5,
+              extraction_model: item.extraction_model || 'gpt-3.5-turbo',
+              confidence_score: item.confidence_score || 0.8
+            });
         }
 
         // Update newsletter status
@@ -178,12 +131,11 @@ export default async function handler(req, res) {
 
         processedNewsletters.push({
           ...insertedNewsletter,
-          insights: insights
+          news_items_count: newsItems.length
         });
 
       } catch (error) {
         console.error('Error processing newsletter:', error);
-        
         // Log error
         await supabase
           .from('processing_logs')
