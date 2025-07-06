@@ -261,6 +261,8 @@ MIT License - see LICENSE file for details.
 
 You can now control which sender email addresses or domains are allowed for newsletter processing, directly from the UI.
 
+- **All user configuration (allowed senders, filters, and actions) is now in a sticky side panel, always visible while scrolling the news feed.**
+
 ### Features
 - **Add/Remove Allowed Senders:**
   - Add a full email (e.g. `editor@newsletter.com`) or a domain (e.g. `substack.com`).

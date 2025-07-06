@@ -150,148 +150,157 @@ export default function NewsletterDigest() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Allowed Senders Management */}
-      <div className="bg-white border rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-2">Allowed Senders</h2>
-        <p className="text-gray-500 mb-2 text-sm">Only newsletters from these email addresses/domains will be processed. Add a full email (e.g. editor@newsletter.com) or a domain (e.g. substack.com).</p>
-        <form
-          className="flex gap-2 mb-2"
-          onSubmit={handleAddSource}
-        >
-          <input
-            type="text"
-            value={newSource}
-            onChange={e => { setNewSource(e.target.value); setInputError(null) }}
-            placeholder="Add email or domain"
-            className={`border rounded px-2 py-1 flex-1 ${inputError ? 'border-red-500' : ''}`}
-            disabled={sourcesLoading}
-            aria-invalid={!!inputError}
-            aria-describedby="allowed-sender-error"
-          />
-          <button
-            type="submit"
-            className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            disabled={sourcesLoading || !newSource}
-          >Add</button>
-        </form>
-        {inputError && <div id="allowed-sender-error" className="text-red-600 text-sm mb-2">{inputError}</div>}
-        {sourcesLoading && <div className="text-gray-500">Loading allowed senders…</div>}
-        {sourcesError && <div className="text-red-600">{sourcesError}</div>}
-        <ul className="divide-y">
-          {sources.map((src: any) => {
-            const isEmail = src.email_address.includes('@')
-            return (
-              <li key={src.email_address} className="flex items-center justify-between py-2">
-                <span className="flex items-center gap-2">
-                  {isEmail ? <MailIcon className="w-4 h-4 text-blue-500" /> : <Globe2 className="w-4 h-4 text-green-600" />}
-                  <span>{src.email_address}</span>
-                  {src.name && <span className="ml-2 text-xs text-gray-500">({src.name})</span>}
-                </span>
-                <button
-                  className="text-red-600 hover:underline text-sm"
-                  onClick={() => removeSource(src.email_address)}
+    <div className="max-w-7xl mx-auto p-4 md:p-8">
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Side Panel */}
+        <aside className="md:w-80 w-full flex-shrink-0">
+          <div className="sticky top-8 space-y-8">
+            {/* Allowed Senders Management */}
+            <div className="bg-white border rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold mb-2">Allowed Senders</h2>
+              <p className="text-gray-500 mb-2 text-sm">Only newsletters from these email addresses/domains will be processed. Add a full email (e.g. editor@newsletter.com) or a domain (e.g. substack.com).</p>
+              <form
+                className="flex gap-2 mb-2"
+                onSubmit={handleAddSource}
+              >
+                <input
+                  type="text"
+                  value={newSource}
+                  onChange={e => { setNewSource(e.target.value); setInputError(null) }}
+                  placeholder="Add email or domain"
+                  className={`border rounded px-2 py-1 flex-1 ${inputError ? 'border-red-500' : ''}`}
                   disabled={sourcesLoading}
-                >Remove</button>
-              </li>
-            )
-          })}
-          {sources.length === 0 && !sourcesLoading && <li className="text-gray-400 py-2">No allowed senders yet.</li>}
-        </ul>
-      </div>
-      {/* Filter Pane */}
-      <div className="bg-white border rounded-lg shadow-sm p-6 mb-6">
-        <div className="flex flex-wrap items-end gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={periodStart}
-              max={periodEnd}
-              onChange={e => setPeriodStart(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
+                  aria-invalid={!!inputError}
+                  aria-describedby="allowed-sender-error"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  disabled={sourcesLoading || !newSource}
+                >Add</button>
+              </form>
+              {inputError && <div id="allowed-sender-error" className="text-red-600 text-sm mb-2">{inputError}</div>}
+              {sourcesLoading && <div className="text-gray-500">Loading allowed senders…</div>}
+              {sourcesError && <div className="text-red-600">{sourcesError}</div>}
+              <ul className="divide-y">
+                {sources.map((src: any) => {
+                  const isEmail = src.email_address.includes('@')
+                  return (
+                    <li key={src.email_address} className="flex items-center justify-between py-2">
+                      <span className="flex items-center gap-2">
+                        {isEmail ? <MailIcon className="w-4 h-4 text-blue-500" /> : <Globe2 className="w-4 h-4 text-green-600" />}
+                        <span>{src.email_address}</span>
+                        {src.name && <span className="ml-2 text-xs text-gray-500">({src.name})</span>}
+                      </span>
+                      <button
+                        className="text-red-600 hover:underline text-sm"
+                        onClick={() => removeSource(src.email_address)}
+                        disabled={sourcesLoading}
+                      >Remove</button>
+                    </li>
+                  )
+                })}
+                {sources.length === 0 && !sourcesLoading && <li className="text-gray-400 py-2">No allowed senders yet.</li>}
+              </ul>
+            </div>
+            {/* Filter Pane & Actions */}
+            <div className="bg-white border rounded-lg shadow-sm p-6">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={periodStart}
+                      max={periodEnd}
+                      onChange={e => setPeriodStart(e.target.value)}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={periodEnd}
+                      min={periodStart}
+                      max={defaultEnd}
+                      onChange={e => setPeriodEnd(e.target.value)}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">How many news items to display?</label>
+                    <input
+                      type="number"
+                      min={NEWSLETTER_DEFAULTS.minLimit}
+                      max={NEWSLETTER_DEFAULTS.maxLimit}
+                      value={newsItemLimit}
+                      onChange={e => setNewsItemLimit(Number(e.target.value))}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 pt-2">
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full justify-center"
+                    onClick={() => user && fetchNewsItems(user.id, { limit: newsItemLimit, startDate: periodStart, endDate: periodEnd })}
+                  >
+                    <RefreshCw className="w-4 h-4" /> Fetch News Items
+                  </button>
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 w-full justify-center"
+                    onClick={handleProcessNewsletters}
+                    disabled={processing}
+                  >
+                    <Mail className="w-4 h-4" /> Process New Newsletters
+                  </button>
+                  {(gmailToken || gmailRefreshToken) ? (
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 w-full justify-center"
+                      onClick={handleDisconnectGmail}
+                      type="button"
+                    >
+                      Disconnect Gmail
+                    </button>
+                  ) : (
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 w-full justify-center"
+                      onClick={handleGmailAuth}
+                      type="button"
+                    >
+                      Connect Gmail
+                    </button>
+                  )}
+                </div>
+                {processSuccess && (
+                  <div className="text-green-600 text-center pt-2">Processing complete! Click "Fetch News Items" to refresh the feed.</div>
+                )}
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-            <input
-              type="date"
-              value={periodEnd}
-              min={periodStart}
-              max={defaultEnd}
-              onChange={e => setPeriodEnd(e.target.value)}
-              className="border rounded px-2 py-1"
-            />
+        </aside>
+        {/* Main Feed */}
+        <main className="flex-1 min-w-0">
+          <div className="space-y-8">
+            {/* Loading state */}
+            {loading && <div className="text-center text-gray-500 py-8">Loading news items…</div>}
+            {/* Empty state */}
+            {!loading && newsItems.length === 0 && (
+              <div className="text-center text-gray-400 py-8">
+                No news items found.<br />
+                Try processing new newsletters or adjusting your filters.
+              </div>
+            )}
+            {/* News feed */}
+            {newsItems.length > 0 && (
+              <div className="grid gap-6">
+                {newsItems.map((item) => (
+                  <NewsItemCard key={item.id} item={item} />
+                ))}
+              </div>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">How many news items to display?</label>
-            <input
-              type="number"
-              min={NEWSLETTER_DEFAULTS.minLimit}
-              max={NEWSLETTER_DEFAULTS.maxLimit}
-              value={newsItemLimit}
-              onChange={e => setNewsItemLimit(Number(e.target.value))}
-              className="border rounded px-2 py-1 w-24"
-            />
-          </div>
-        </div>
-        {/* Action Buttons on a new line */}
-        <div className="flex flex-wrap gap-4 mb-4">
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            onClick={() => user && fetchNewsItems(user.id, { limit: newsItemLimit, startDate: periodStart, endDate: periodEnd })}
-          >
-            <RefreshCw className="w-4 h-4" /> Fetch News Items
-          </button>
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            onClick={handleProcessNewsletters}
-            disabled={processing}
-          >
-            <Mail className="w-4 h-4" /> Process New Newsletters
-          </button>
-          { (gmailToken || gmailRefreshToken) ? (
-            <button
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-              onClick={handleDisconnectGmail}
-              type="button"
-            >
-              Disconnect Gmail
-            </button>
-          ) : (
-            <button
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
-              onClick={handleGmailAuth}
-              type="button"
-            >
-              Connect Gmail
-            </button>
-          )}
-        </div>
-        {/* Success message after processing */}
-        {processSuccess && (
-          <div className="text-green-600 text-center">Processing complete! Click "Fetch News Items" to refresh the feed.</div>
-        )}
-      </div>
-      {/* News Feed */}
-      <div className="space-y-8">
-        {/* Loading state */}
-        {loading && <div className="text-center text-gray-500 py-8">Loading news items…</div>}
-        {/* Empty state */}
-        {!loading && newsItems.length === 0 && (
-          <div className="text-center text-gray-400 py-8">
-            No news items found.<br />
-            Try processing new newsletters or adjusting your filters.
-          </div>
-        )}
-        {/* News feed */}
-        {newsItems.length > 0 && (
-          <div className="grid gap-6">
-            {newsItems.map((item) => (
-              <NewsItemCard key={item.id} item={item} />
-            ))}
-          </div>
-        )}
+        </main>
       </div>
     </div>
   )
