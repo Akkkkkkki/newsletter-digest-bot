@@ -144,3 +144,21 @@ create trigger handle_newsletter_sources_updated_at BEFORE
 update on newsletter_sources for EACH row
 execute FUNCTION handle_updated_at ();
 
+-- Table to store groups of similar news items
+create table news_item_groups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  period_start timestamptz not null,
+  period_end timestamptz not null,
+  summary text,
+  relevance_score numeric,
+  created_at timestamptz default timezone('utc', now())
+);
+
+-- Table to link news items to groups (many-to-many)
+create table news_item_group_members (
+  group_id uuid references news_item_groups(id) on delete cascade,
+  news_item_id uuid references news_items(id) on delete cascade,
+  primary key (group_id, news_item_id)
+);
+

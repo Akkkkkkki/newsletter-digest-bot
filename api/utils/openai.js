@@ -5,6 +5,15 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Utility: Strip Markdown code block (with or without language tag) from LLM output
+function stripMarkdownCodeBlock(content) {
+  let trimmed = content.trim();
+  if (trimmed.startsWith('```')) {
+    trimmed = trimmed.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+  }
+  return trimmed;
+}
+
 async function extractNewsletterInsights(content, senderInfo) {
   const prompt = `
 Analyze this newsletter content and extract the following information as JSON:
@@ -43,7 +52,8 @@ Return ONLY valid JSON in this exact format:
       max_tokens: OPENAI_DEFAULTS.maxTokens
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    let content = stripMarkdownCodeBlock(response.choices[0].message.content);
+    return JSON.parse(content);
   } catch (error) {
     console.error('OpenAI API error:', error);
     return {
@@ -95,7 +105,9 @@ async function synthesizeDigestSummary(insights) {
       temperature: OPENAI_DEFAULTS.temperature,
       max_tokens: OPENAI_DEFAULTS.maxTokens
     });
-    return JSON.parse(response.choices[0].message.content);
+
+    let content = stripMarkdownCodeBlock(response.choices[0].message.content);
+    return JSON.parse(content);
   } catch (error) {
     console.error('OpenAI digest synthesis error:', error);
     return {
@@ -164,7 +176,9 @@ Return ONLY valid JSON in this format:
       temperature: OPENAI_DEFAULTS.temperature,
       max_tokens: Math.max(OPENAI_DEFAULTS.maxTokens, 1500)
     });
-    let items = JSON.parse(response.choices[0].message.content);
+
+    let content = stripMarkdownCodeBlock(response.choices[0].message.content);
+    let items = JSON.parse(content);
     // Add extraction_model to each item
     if (Array.isArray(items)) {
       items = items.map(item => ({ ...item, extraction_model: OPENAI_DEFAULTS.model }));

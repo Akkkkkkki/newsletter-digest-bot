@@ -1,4 +1,4 @@
-const { supabase } = require('../../utils/supabase');
+const { supabase } = require('../utils/supabase');
 const { CONSENSUS_DEFAULTS } = require('../../lib/config');
 
 // Simple relevance scoring function
@@ -101,6 +101,44 @@ export default async function handler(req, res) {
   const consensus = groups
     .filter(g => g.mention_count >= min_mentions)
     .sort((a, b) => b.relevance_score - a.relevance_score);
+
+  // Persist consensus groups and their members to the database (non-blocking)
+  (async () => {
+    for (const group of consensus) {
+      // Insert group row
+      const { data: groupRow, error: groupError } = await supabase
+        .from('news_item_groups')
+        .insert([
+          {
+            user_id,
+            period_start,
+            period_end,
+            summary: group.summary,
+            relevance_score: group.relevance_score,
+          },
+        ])
+        .select('id')
+        .single();
+      if (groupError) {
+        console.error('Failed to insert news_item_group:', groupError);
+        continue;
+      }
+      const group_id = groupRow.id;
+      // Insert group members
+      const members = group.mentions.map(m => ({
+        group_id,
+        news_item_id: m.news_item_id,
+      }));
+      if (members.length > 0) {
+        const { error: membersError } = await supabase
+          .from('news_item_group_members')
+          .insert(members);
+        if (membersError) {
+          console.error('Failed to insert news_item_group_members:', membersError);
+        }
+      }
+    }
+  })();
 
   return res.status(200).json({
     consensus,

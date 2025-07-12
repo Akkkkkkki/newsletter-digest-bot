@@ -13,15 +13,37 @@ export default function ConsensusFeed({ periodStart, periodEnd }: { periodStart:
   const [manualTrigger, setManualTrigger] = useState(0)
 
   const fetchConsensus = async (sim: number, maxQ: number) => {
-    if (!user) return
+    if (!user || !user.id) return
+    // Validate periodStart and periodEnd as ISO date strings
+    if (!periodStart || !periodEnd || isNaN(Date.parse(periodStart)) || isNaN(Date.parse(periodEnd))) {
+      setError('Please select a valid date range.');
+      setConsensus([]);
+      return;
+    }
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/newsletters/consensus?user_id=${user.id}&period_start=${periodStart}&period_end=${periodEnd}&similarity_threshold=${sim}&max_per_query=${maxQ}`)
-      const data = await res.json()
+      const res = await fetch(`/api/newsletters/consensus?user_id=${encodeURIComponent(user.id.trim())}&period_start=${encodeURIComponent(periodStart)}&period_end=${encodeURIComponent(periodEnd)}&similarity_threshold=${sim}&max_per_query=${maxQ}`)
+      let data
+      try {
+        data = await res.json()
+      } catch (jsonErr) {
+        // If not JSON, show a user-friendly error
+        setError('Server error: Could not parse response. Please try again or contact support.')
+        setConsensus([])
+        setLoading(false)
+        return
+      }
+      if (!res.ok) {
+        setError(data?.error || 'Server error. Please try again or contact support.')
+        setConsensus([])
+        setLoading(false)
+        return
+      }
       setConsensus(data.consensus || [])
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || 'Network error. Please try again.')
+      setConsensus([])
     } finally {
       setLoading(false)
     }

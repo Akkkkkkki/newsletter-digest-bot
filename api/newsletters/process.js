@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     // Initialize Gmail service with refresh token if provided
     const gmailService = new GmailService(access_token, refresh_token);
 
-    // Fetch user's allowed newsletter sources
+    // Fetch user's allowed newsletter sources (only user-specified)
     const { data: sources, error: sourcesError } = await supabase
       .from('newsletter_sources')
       .select('email_address')
@@ -29,8 +29,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to fetch newsletter sources' });
     }
     const allowedSenders = (sources || []).map(s => s.email_address.toLowerCase());
-    // Optionally, allow some default domains (e.g., substack.com)
-    const allowedDomains = CONFIG_DEFAULTS.allowedDomains;
+    // No default domains: only user-specified
+    const allowedDomains = [];
     // Fetch already-processed Gmail message IDs for this user
     const { data: processed, error: processedError } = await supabase
       .from('newsletters')
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to fetch processed message IDs' });
     }
     const processedMessageIds = (processed || []).map(n => n.gmail_message_id);
-    // Fetch recent newsletters with filtering
+    // Fetch recent newsletters with filtering (only user-specified senders/domains)
     const newsletters = await gmailService.fetchRecentNewsletters({
       maxResults: CONFIG_DEFAULTS.limit,
       allowedSenders,

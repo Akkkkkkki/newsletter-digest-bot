@@ -6,6 +6,7 @@ import { useNewsItems, useNewsletterSources } from '@/hooks/useNewsletters'
 import { Mail, RefreshCw, Calendar, Tag, TrendingUp, Link2, Users, Building2, CheckCircle, ChevronDown, ChevronUp, Mail as MailIcon, Globe2 } from 'lucide-react'
 import type { NewsItem } from '@/lib/types'
 import { NEWSLETTER_DEFAULTS } from '@/lib/config'
+import ConsensusFeed from './ConsensusFeed'
 
 export default function NewsletterDigest() {
   const { user, connectGmail } = useAuth()
@@ -104,12 +105,15 @@ export default function NewsletterDigest() {
     window.location.href = authUrl
   }
 
-  const handleProcessNewsletters = async () => {
+  const handleFetchAndProcess = async () => {
     setProcessing(true)
     setProcessSuccess(false)
     try {
       if (user && gmailToken) {
+        // 1. Process new newsletters (fetch from Gmail, extract news items, store in DB)
         await processNewsletters(user.id, gmailToken)
+        // 2. Fetch news items (triggers clustering and updates UI)
+        await fetchNewsItems(user.id, { limit: newsItemLimit, startDate: periodStart, endDate: periodEnd })
         setProcessSuccess(true)
       }
     } finally {
@@ -160,7 +164,7 @@ export default function NewsletterDigest() {
               <h2 className="text-lg font-semibold mb-2">Allowed Senders</h2>
               <p className="text-gray-500 mb-2 text-sm">Only newsletters from these email addresses/domains will be processed. Add a full email (e.g. editor@newsletter.com) or a domain (e.g. substack.com).</p>
               <form
-                className="flex gap-2 mb-2"
+                className="flex flex-wrap gap-2 mb-2"
                 onSubmit={handleAddSource}
               >
                 <input
@@ -168,14 +172,14 @@ export default function NewsletterDigest() {
                   value={newSource}
                   onChange={e => { setNewSource(e.target.value); setInputError(null) }}
                   placeholder="Add email or domain"
-                  className={`border rounded px-2 py-1 flex-1 ${inputError ? 'border-red-500' : ''}`}
+                  className={`border rounded px-2 py-1 flex-1 min-w-0 ${inputError ? 'border-red-500' : ''}`}
                   disabled={sourcesLoading}
                   aria-invalid={!!inputError}
                   aria-describedby="allowed-sender-error"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
                   disabled={sourcesLoading || !newSource}
                 >Add</button>
               </form>
@@ -243,16 +247,10 @@ export default function NewsletterDigest() {
                 <div className="flex flex-col gap-2 pt-2">
                   <button
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full justify-center"
-                    onClick={() => user && fetchNewsItems(user.id, { limit: newsItemLimit, startDate: periodStart, endDate: periodEnd })}
-                  >
-                    <RefreshCw className="w-4 h-4" /> Fetch News Items
-                  </button>
-                  <button
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 w-full justify-center"
-                    onClick={handleProcessNewsletters}
+                    onClick={handleFetchAndProcess}
                     disabled={processing}
                   >
-                    <Mail className="w-4 h-4" /> Process New Newsletters
+                    <RefreshCw className="w-4 h-4" /> Fetch New Items
                   </button>
                   {(gmailToken || gmailRefreshToken) ? (
                     <button
@@ -273,7 +271,7 @@ export default function NewsletterDigest() {
                   )}
                 </div>
                 {processSuccess && (
-                  <div className="text-green-600 text-center pt-2">Processing complete! Click "Fetch News Items" to refresh the feed.</div>
+                  <div className="text-green-600 text-center pt-2">Processing complete! Click "Fetch New Items" to refresh the feed.</div>
                 )}
               </div>
             </div>
@@ -282,23 +280,8 @@ export default function NewsletterDigest() {
         {/* Main Feed */}
         <main className="flex-1 min-w-0">
           <div className="space-y-8">
-            {/* Loading state */}
-            {loading && <div className="text-center text-gray-500 py-8">Loading news items…</div>}
-            {/* Empty state */}
-            {!loading && newsItems.length === 0 && (
-              <div className="text-center text-gray-400 py-8">
-                No news items found.<br />
-                Try processing new newsletters or adjusting your filters.
-              </div>
-            )}
-            {/* News feed */}
-            {newsItems.length > 0 && (
-              <div className="grid gap-6">
-                {newsItems.map((item) => (
-                  <NewsItemCard key={item.id} item={item} />
-                ))}
-              </div>
-            )}
+            {/* Show consensus feed (news item clusters) always */}
+            <ConsensusFeed periodStart={periodStart} periodEnd={periodEnd} />
           </div>
         </main>
       </div>
