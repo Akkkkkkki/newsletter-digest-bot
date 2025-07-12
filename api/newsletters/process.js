@@ -1,6 +1,7 @@
 const { supabase } = require('../utils/supabase');
 const { GmailService } = require('../utils/gmail');
 const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../utils/openai');
+const { processNewsItemsForStories } = require('../headlines/top-referenced');
 const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 const { NEWSLETTER_DEFAULTS: CONFIG_DEFAULTS } = require('../../lib/config');
 
@@ -91,17 +92,29 @@ export default async function handler(req, res) {
         const senderInfo = `${newsletter.senderName} <${newsletter.senderEmail}>`;
         const newsItems = await extractNewsItemsFromNewsletter(newsletter.content, senderInfo);
 
+        // Find matching source_id from newsletter_sources
+        const { data: sourceMatch } = await supabase
+          .from('newsletter_sources')
+          .select('id')
+          .eq('user_id', user_id)
+          .eq('email_address', newsletter.senderEmail)
+          .single();
+
+        const sourceId = sourceMatch?.id || null;
+
         // Insert each news item into news_items table
+        const insertedNewsItems = [];
         for (let i = 0; i < newsItems.length; i++) {
           const item = newsItems[i];
           // Generate embedding for the news item (use summary or content)
           const embedding = await generateEmbedding(item.summary || item.content || item.title);
-          await supabase
+          
+          const { data: insertedItem, error: itemError } = await supabase
             .from('news_items')
             .insert({
               newsletter_id: insertedNewsletter.id,
               user_id: user_id,
-              source_id: null, // Optionally resolve source_id if needed
+              source_id: sourceId,
               title: item.title,
               summary: item.summary,
               content: item.content,
@@ -117,7 +130,28 @@ export default async function handler(req, res) {
               importance_score: item.importance_score || 0.5,
               extraction_model: item.extraction_model || 'gpt-3.5-turbo',
               confidence_score: item.confidence_score || 0.8
-            });
+            })
+            .select()
+            .single();
+
+          if (!itemError && insertedItem) {
+            // Add newsletter info for story clustering
+            insertedItem.newsletters = {
+              sender_name: newsletter.senderName,
+              sender_email: newsletter.senderEmail,
+              subject: newsletter.subject,
+              received_date: newsletter.date,
+              credibility_score: sourceMatch?.credibility_score || 0.5
+            };
+            insertedNewsItems.push(insertedItem);
+          }
+        }
+
+        // Process news items for story clustering (async - don't wait)
+        if (insertedNewsItems.length > 0) {
+          processNewsItemsForStories(user_id, insertedNewsItems).catch(error => {
+            console.error('Story clustering error:', error);
+          });
         }
 
         // Update newsletter status
