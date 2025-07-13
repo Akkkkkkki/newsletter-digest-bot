@@ -14,40 +14,64 @@ module.exports = async function handler(req, res) {
     const { access_token, refresh_token, user_id } = req.body;
 
     if (!access_token || !user_id) {
-      return res.status(400).json({ error: 'Access token and user ID required' });
+      return res.status(400).json({ error: 'Access token and user ID required', type: 'input' });
     }
 
     // Initialize Gmail service with refresh token if provided
-    const gmailService = new GmailService(access_token, refresh_token);
+    let gmailService;
+    try {
+      gmailService = new GmailService(access_token, refresh_token);
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to initialize Gmail service', type: 'gmail', details: err.message });
+    }
 
     // Fetch user's allowed newsletter sources (only user-specified)
-    const { data: sources, error: sourcesError } = await supabase
-      .from('newsletter_sources')
-      .select('email_address')
-      .eq('user_id', user_id)
-      .eq('is_active', true);
+    let sources, sourcesError;
+    try {
+      const result = await supabase
+        .from('newsletter_sources')
+        .select('email_address')
+        .eq('user_id', user_id)
+        .eq('is_active', true);
+      sources = result.data;
+      sourcesError = result.error;
+    } catch (err) {
+      return res.status(500).json({ error: 'Database error fetching newsletter sources', type: 'database', details: err.message });
+    }
     if (sourcesError) {
-      return res.status(500).json({ error: 'Failed to fetch newsletter sources' });
+      return res.status(500).json({ error: 'Failed to fetch newsletter sources', type: 'database', details: sourcesError.message });
     }
     const allowedSenders = (sources || []).map(s => s.email_address.toLowerCase());
     // No default domains: only user-specified
     const allowedDomains = [];
     // Fetch already-processed Gmail message IDs for this user
-    const { data: processed, error: processedError } = await supabase
-      .from('newsletters')
-      .select('gmail_message_id')
-      .eq('user_id', user_id);
+    let processed, processedError;
+    try {
+      const result = await supabase
+        .from('newsletters')
+        .select('gmail_message_id')
+        .eq('user_id', user_id);
+      processed = result.data;
+      processedError = result.error;
+    } catch (err) {
+      return res.status(500).json({ error: 'Database error fetching processed message IDs', type: 'database', details: err.message });
+    }
     if (processedError) {
-      return res.status(500).json({ error: 'Failed to fetch processed message IDs' });
+      return res.status(500).json({ error: 'Failed to fetch processed message IDs', type: 'database', details: processedError.message });
     }
     const processedMessageIds = (processed || []).map(n => n.gmail_message_id);
     // Fetch recent newsletters with filtering (only user-specified senders/domains)
-    const newsletters = await gmailService.fetchRecentNewsletters({
-      maxResults: CONFIG_DEFAULTS.limit,
-      allowedSenders,
-      allowedDomains,
-      processedMessageIds
-    });
+    let newsletters;
+    try {
+      newsletters = await gmailService.fetchRecentNewsletters({
+        maxResults: CONFIG_DEFAULTS.limit,
+        allowedSenders,
+        allowedDomains,
+        processedMessageIds
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Gmail API error', type: 'gmail', details: err.message });
+    }
 
     const processedNewsletters = [];
 
@@ -89,8 +113,18 @@ module.exports = async function handler(req, res) {
         }
 
         // Extract all news items from the newsletter
-        const senderInfo = `${newsletter.senderName} <${newsletter.senderEmail}>`;
-        const newsItems = await extractNewsItemsFromNewsletter(newsletter.content, senderInfo);
+        let newsItems;
+        try {
+          newsItems = await extractNewsItemsFromNewsletter(newsletter.content, `${newsletter.senderName} <${newsletter.senderEmail}>`);
+        } catch (err) {
+          await supabase.from('processing_logs').insert({
+            user_id: user_id,
+            step: 'extract_news_items',
+            status: 'failed',
+            error_message: err.message
+          });
+          return res.status(500).json({ error: 'OpenAI extraction error', type: 'openai', details: err.message });
+        }
 
         // Find matching source_id from newsletter_sources
         const { data: sourceMatch } = await supabase
@@ -107,8 +141,18 @@ module.exports = async function handler(req, res) {
         for (let i = 0; i < newsItems.length; i++) {
           const item = newsItems[i];
           // Generate embedding for the news item (use summary or content)
-          const embedding = await generateEmbedding(item.summary || item.content || item.title);
-          
+          let embedding;
+          try {
+            embedding = await generateEmbedding(item.summary || item.content || item.title);
+          } catch (err) {
+            await supabase.from('processing_logs').insert({
+              user_id: user_id,
+              step: 'generate_embedding',
+              status: 'failed',
+              error_message: err.message
+            });
+            return res.status(500).json({ error: 'OpenAI embedding error', type: 'openai', details: err.message });
+          }
           const { data: insertedItem, error: itemError } = await supabase
             .from('news_items')
             .insert({
@@ -151,6 +195,12 @@ module.exports = async function handler(req, res) {
         if (insertedNewsItems.length > 0) {
           processNewsItemsForStories(user_id, insertedNewsItems).catch(error => {
             console.error('Story clustering error:', error);
+            supabase.from('processing_logs').insert({
+              user_id: user_id,
+              step: 'story_clustering',
+              status: 'failed',
+              error_message: error.message
+            });
           });
         }
 
@@ -179,6 +229,7 @@ module.exports = async function handler(req, res) {
             status: 'failed',
             error_message: error.message
           });
+        return res.status(500).json({ error: 'Newsletter processing error', type: 'processing', details: error.message });
       }
     }
 
@@ -189,6 +240,6 @@ module.exports = async function handler(req, res) {
 
   } catch (error) {
     console.error('Processing error:', error);
-    return res.status(500).json({ error: 'Processing failed' });
+    return res.status(500).json({ error: 'Unknown processing error', type: 'unknown', details: error.message });
   }
 } 

@@ -1,5 +1,14 @@
 # Newsletter Digest Bot - Technical Design Document
 
+## Recent Updates (June 2024)
+
+- **Database schema is now complete**: All referenced tables (including `story_mentions`, `story_mention_news_items`, `processing_logs`) exist in Supabase, with `updated_at` columns and triggers for auditability.
+- **All required triggers and functions** (e.g., `handle_updated_at()`) are implemented and attached to relevant tables.
+- **OpenAI integration is now real**: The backend uses OpenAI API for extracting news items from newsletters and generating embeddings, replacing all mock logic.
+- **Story clustering logic implemented**: Clustering now uses title similarity, entity overlap, and semantic similarity (via OpenAI embeddings) to group related news items.
+
+---
+
 ## Executive Summary
 
 This technical design focuses on creating a <3 minute headline scanning experience with two core features:
@@ -38,7 +47,7 @@ The authoritative schema is managed in `supabase/schema.sql` and migration files
 - **newsletter_sources**
   - `id` (uuid, PK)
   - `user_id` (uuid, FK → users.id)
-  - `email_address` (unique per user), `name`, `credibility_score`, `category`, `description`, `is_active`, `metadata`, `created_at`, `updated_at`
+  - `email_address` (unique per user), `name`, `credibility_score`, `category`, `description`, `is_active`, `metadata`, `voice_priority`, `last_content_at`, `content_frequency`, `expertise_keywords`, `created_at`, `updated_at`
 
 - **newsletters**
   - `id` (uuid, PK)
@@ -53,15 +62,34 @@ The authoritative schema is managed in `supabase/schema.sql` and migration files
   - `source_id` (uuid, FK → newsletter_sources.id)
   - `title`, `summary`, `content`, `url`, `position`, `embedding` (vector), `topics`, `people_mentioned`, `products_mentioned`, `companies_mentioned`, `events_mentioned`, `sentiment`, `importance_score`, `extraction_model`, `confidence_score`, `created_at`, `updated_at`
 
+- **story_mentions**
+  - `id` (uuid, PK)
+  - `user_id` (uuid, FK → users.id)
+  - `story_cluster_id` (text, LLM-generated), `canonical_title`, `canonical_summary`, `mention_count`, `first_mentioned_at`, `last_mentioned_at`, `mentioning_sources`, `news_item_ids`, `trend_analysis`, `impact_assessment`, `key_entities`, `trending_score`, `importance_score`, `velocity_score`, `created_at`, `updated_at`
+
+- **story_mention_news_items**
+  - `story_mention_id` (uuid, PK, FK → story_mentions.id)
+  - `news_item_id` (uuid, PK, FK → news_items.id)
+  - `updated_at` (timestamp)
+  - Join table for many-to-many relationship between story_mentions and news_items
+
+- **processing_logs**
+  - `id` (uuid, PK)
+  - `user_id` (uuid, FK → users.id)
+  - `newsletter_id` (uuid, FK → newsletters.id)
+  - `step` (text), `status` (text: started/completed/failed), `error_message`, `metadata`, `created_at`, `updated_at`
+  - Used for tracking processing pipeline steps and errors
+
 - **news_item_groups**
   - `id` (uuid, PK)
   - `user_id` (uuid, FK → users.id)
-  - `period_start`, `period_end`, `summary`, `relevance_score`, `created_at`
+  - `period_start`, `period_end`, `summary`, `relevance_score`, `created_at`, `updated_at`
   - Used for consensus/trend grouping of news items
 
 - **news_item_group_members**
   - `group_id` (uuid, PK, FK → news_item_groups.id)
   - `news_item_id` (uuid, PK, FK → news_items.id)
+  - `updated_at` (timestamp)
   - Many-to-many relationship between groups and news items
 
 ### Indexes
@@ -75,6 +103,17 @@ The authoritative schema is managed in `supabase/schema.sql` and migration files
 - `handle_users_updated_at` on users (updates updated_at)
 - `handle_news_items_updated_at` on news_items (updates updated_at)
 - `handle_newsletter_sources_updated_at` on newsletter_sources (updates updated_at)
+- `handle_story_mentions_updated_at` on story_mentions (updates updated_at)
+- `handle_story_mention_news_items_updated_at` on story_mention_news_items (updates updated_at)
+- `handle_processing_logs_updated_at` on processing_logs (updates updated_at)
+- `handle_news_item_group_members_updated_at` on news_item_group_members (updates updated_at)
+- `handle_news_item_groups_updated_at` on news_item_groups (updates updated_at)
+
+> All join and tracking tables now have `updated_at` columns and triggers for auditability and consistency.
+
+### Functions
+- `handle_updated_at()` — generic trigger function for updating `updated_at` timestamp
+- `handle_news_items_updated_at()` — specific trigger for news_items table
 
 ### Relationships
 - users → newsletters, newsletter_sources, news_items, news_item_groups

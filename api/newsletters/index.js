@@ -7,10 +7,25 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { user_id, limit = NEWSLETTER_DEFAULTS.limit, days_back = NEWSLETTER_DEFAULTS.daysBack, category, start_date, end_date } = req.query;
+    const { user_id, limit = NEWSLETTER_DEFAULTS.limit, days_back = NEWSLETTER_DEFAULTS.daysBack, category, start_date, end_date, latest_email } = req.query;
 
     if (!user_id) {
       return res.status(400).json({ error: 'User ID required' });
+    }
+
+    // New: Return latest received_date for this user
+    if (latest_email === 'true') {
+      const { data: latest, error: latestError } = await supabase
+        .from('newsletters')
+        .select('received_date')
+        .eq('user_id', user_id)
+        .order('received_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestError) {
+        return res.status(500).json({ error: 'Failed to fetch latest email date', details: latestError.message });
+      }
+      return res.status(200).json({ latest_received_date: latest?.received_date || null });
     }
 
     let query = supabase

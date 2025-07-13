@@ -1,5 +1,6 @@
 import AuthButton from '@/components/AuthButton'
 import QuickScan from '@/components/QuickScan'
+import NewsletterDigest from '@/components/NewsletterDigest'
 
 export default function Home() {
   return (
@@ -12,6 +13,7 @@ export default function Home() {
       </header>
       
       <main className="py-8">
+        <NewsletterDigest />
         <QuickScan />
       </main>
     </div>

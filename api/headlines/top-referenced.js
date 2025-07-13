@@ -7,7 +7,7 @@ const clusteringEngine = new StoryClusteringEngine();
  * API endpoint for Top Referenced News - stories mentioned across multiple sources
  * GET /api/headlines/top-referenced
  */
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -303,4 +303,5 @@ async function updateTrendingScores(userId) {
   }
 }
 
-exports.processNewsItemsForStories = processNewsItemsForStories;
+module.exports = handler;
+module.exports.processNewsItemsForStories = processNewsItemsForStories;

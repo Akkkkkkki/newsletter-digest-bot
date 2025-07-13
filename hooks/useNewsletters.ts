@@ -58,11 +58,20 @@ export const useNewsItems = (defaultOptions: UseNewsItemsOptions = NEWSLETTER_DE
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      let data
+      try {
+        data = await response.json()
+      } catch (err) {
+        throw new Error('Server error: Could not parse response. Please try again or contact support.')
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        let msg = data?.error || `HTTP error! status: ${response.status}`
+        if (data?.type) msg += ` [${data.type}]`
+        if (data?.details) msg += `\nDetails: ${data.details}`
+        throw new Error(msg)
+      }
+
       // Refresh news items after processing
       await fetchNewsItems(userId)
       return data
