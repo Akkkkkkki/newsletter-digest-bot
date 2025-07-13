@@ -1,6 +1,6 @@
-const { supabase } = require('../utils/supabase');
+const { supabase } = require('../../lib/supabase.node');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const user_id = req.method === 'GET' ? req.query.user_id : req.body.user_id;
   if (!user_id) {
     return res.status(400).json({ error: 'User ID required' });

@@ -2,106 +2,92 @@
 
 ## Executive Summary
 
-The Newsletter Digest Bot is designed to be an **elite AI-powered news intelligence platform** that surfaces cutting-edge insights from the most influential voices in AI, software engineering, and entrepreneurship. The current implementation falls short of delivering the high-signal, industry-leading content you need.
+The Newsletter Digest Bot is a personal tool designed to help users efficiently gather high-signal information from trusted voices and widely referenced industry newsletters. The goal is to deliver a concise, relevant news digest that surfaces insights from your preferred sources and highlights topics that are trending or frequently mentioned across the industry. All processing, storage, and UI is at the news item level, not the email level.
 
 ## Problem Statement
 
 ### Current Pain Points
-- **Signal-to-noise ratio is too low**: Generic AI/tech headlines dominate instead of cutting-edge insights
-- **Missing thought leadership**: Not prioritizing content from industry pioneers and influential voices
-- **Weak trend detection**: Fails to identify emerging technologies, tools, and paradigm shifts
-- **Poor quality filtering**: No distinction between mainstream news and insider insights
-- **Limited personalization**: Doesn't learn from your preferences or adapt to your interests
+- Too much noise: Generic headlines crowd out genuinely useful or interesting content
+- Hard to track top voices: It's difficult to keep up with updates from people or sources you care about
+- Weak trend detection: Hard to spot what is being widely discussed or referenced
+- No easy way to filter or personalize: Most tools don't adapt to your interests or let you tune the signal
 
 ### Target User Profile
-**Primary User**: Senior technologists, entrepreneurs, and decision-makers who need:
-- **Cutting-edge insights** from industry leaders and pioneers
-- **Early signals** about emerging technologies, tools, and market shifts
-- **Curated intelligence** that saves time while maximizing learning
-- **Actionable information** that influences strategic decisions
-- **Exclusive perspectives** not available in mainstream tech media
+**Primary User**: Anyone who wants a more efficient way to keep up with important news and insights from trusted sources and industry newsletters, with a focus on:
+- Getting updates from specific people or sources
+- Seeing what topics or stories are being widely referenced
+- Saving time by filtering out low-value or repetitive content
 
 ## Vision & Strategy
 
 ### Product Vision
-"Become the definitive AI-powered intelligence platform for tech leaders who need to stay ahead of the curve"
+"A personal tool to help you quickly scan, filter, and digest the most relevant news and insights from your favorite sources and the broader industry."
 
 ### Key Principles
-1. **Quality over Quantity**: 10 high-signal insights > 100 generic articles
-2. **Authority-Driven**: Prioritize content from recognized experts and industry leaders
-3. **Early Detection**: Surface emerging trends before they become mainstream
-4. **Contextual Intelligence**: Understand why something matters, not just what happened
-5. **Personal Relevance**: Learn and adapt to user's specific interests and role
+1. **Signal over Noise**: Prioritize genuinely useful or referenced content
+2. **Source Awareness**: Make it easy to follow updates from people or sources you care about
+3. **Trend Detection**: Highlight what is being widely discussed or referenced
+4. **Personal Relevance**: Let users tune the feed to their interests
+5. **Simplicity**: Fast, clear, and easy to use
 
 ## Core Features & Requirements
 
-### 1. Elite Source Curation
-**Current State**: Basic sender management
-**Target State**: Sophisticated source intelligence
+### 1. Source Management
+- Add/remove newsletter senders you want to follow
+- Only emails from active sources (or matching newsletter heuristics) are processed
+- Option to set source priority or "favorite" certain senders
 
-**Features**:
-- **Thought Leader Profiles**: Pre-built profiles for industry luminaries (Karpathy, Hinton, Sam Altman, etc.)
-- **Authority Scoring**: AI-powered credibility assessment based on expertise, track record, and influence
-- **Source Discovery**: Intelligent recommendations for new high-value sources
-- **Insider Networks**: Access to exclusive newsletters from VCs, researchers, and industry insiders
-- **Quality Signals**: Engagement metrics, citation patterns, and peer recognition
+### 2. Content Extraction & Summarization
+- Use AI to extract and summarize individual news items from emails
+- Each news item is stored with its own metadata (title, summary, content, topics, entities, etc.)
+- Avoid over-segmentation and over-generalization
 
-### 2. Advanced Content Intelligence
-**Current State**: Basic topic extraction
-**Target State**: Deep semantic understanding
+### 3. Trend & Consensus Detection
+- Group similar news items using semantic similarity
+- Highlight stories or topics that are referenced by multiple newsletters
+- Show which sources mentioned each item
+- Configurable grouping parameters (similarity threshold, max per query)
 
-**Features**:
-- **Breakthrough Detection**: Identify genuine innovations vs. incremental improvements
-- **Technical Depth Assessment**: Distinguish between surface-level and deep technical content
-- **Impact Prediction**: Assess potential significance of announcements and research
-- **Context Enrichment**: Connect news to broader industry trends and implications
-- **Expertise Matching**: Align content complexity with user's technical background
+### 4. Personalization & Filtering
+- Mark items as "more like this" or "less like this" to tune future digests
+- Option to mute generic or low-value topics
+- Filter by source, topic, or entity
 
-### 3. Intelligent Trend Detection
-**Current State**: Simple mention counting
-**Target State**: Sophisticated trend analysis
+### 5. Digest Experience
+- Top section: Updates from your favorite sources
+- Trending/consensus: Most referenced news items across all newsletters
+- Discover: New or emerging topics/entities/tools
+- All sections are populated by individual news items, not just newsletter emails
 
-**Features**:
-- **Weak Signal Detection**: Identify emerging trends before they gain momentum
-- **Cross-Source Synthesis**: Connect related insights across different sources
-- **Momentum Tracking**: Monitor how trends gain or lose traction over time
-- **Contrarian Views**: Surface dissenting opinions and alternative perspectives
-- **Timeline Analysis**: Understand trend evolution and predict future developments
+### 6. Allowed Sender Management
+- Add/remove allowed senders (full email or domain)
+- Input validation and duplicate prevention
+- Enhanced list display (email/domain icons, source name if available)
+- Backend API for managing allowed senders
+- React hook for fetching, adding, and removing allowed senders
 
-### 4. Personalized Intelligence Engine
-**Current State**: Static filtering
-**Target State**: Adaptive learning system
-
-**Features**:
-- **Learning Preferences**: Adapt based on reading behavior, saves, and engagement
-- **Role-Based Filtering**: Customize content for CTOs, founders, researchers, etc.
-- **Interest Evolution**: Track changing interests and adjust recommendations
-- **Expertise Level**: Match content complexity to user's background
-- **Action-Oriented**: Prioritize actionable insights over theoretical discussions
-
-### 5. Premium Experience Design
-**Current State**: Basic web interface
-**Target State**: Elite user experience
-
-**Features**:
-- **Executive Summary**: Daily briefing with top 5-10 must-read insights
-- **Deep Dive Mode**: Comprehensive analysis of major developments
-- **Research Assistant**: AI-powered follow-up questions and related insights
-- **Knowledge Graphs**: Visual connections between people, companies, and technologies
-- **Mobile-First**: Optimized for quick consumption during commutes or breaks
+### 7. Roadmap (Phases)
+- **MVP**: Gmail OAuth integration, fetch and summarize newsletters, mobile-first UI, daily/weekly digest
+- **Multi-source Aggregation**: Ingest multiple newsletters, extract and split all news items, present in a single feed
+- **Consensus Grouping & Ranking**: Group similar news items, assign consensus scores, rank and display at the top
+- **Personalization**: Star/follow sources, feedback and muting, filter by topic/entity
+- **Trending & Discover**: Highlight trending topics, show new or emerging items
+- **Advanced Retrieval**: Store news items and metadata in a vector database, enable semantic and metadata-based retrieval
+- **Polish & Notifications**: Push/email notifications, UI/UX improvements, dark mode, offline support
+- **Future Enhancements**: Support for other content sources (RSS, Twitter, etc.), voice assistant integration, multi-user support
 
 ## User Journey & Experience
 
 ### Daily Workflow
-1. **Morning Brief** (5 minutes): Top insights from overnight developments
-2. **Commute Reading** (15-20 minutes): Curated selection of high-value content
-3. **Deep Focus** (30+ minutes): In-depth analysis of major breakthroughs or trends
-4. **Research Mode**: Follow-up on specific topics or technologies of interest
+1. **Morning Brief**: Top insights from overnight developments
+2. **Quick Scan**: Curated selection of high-value content
+3. **Deep Dive**: In-depth analysis of major stories or trends
+4. **Research Mode**: Follow up on specific topics or technologies
 
 ### Content Hierarchy
 1. **Breaking**: Immediate alerts for significant developments
-2. **Featured**: Top 3-5 insights from elite sources
-3. **Trending**: Cross-source consensus on emerging topics
+2. **Featured**: Top insights from your favorite sources
+3. **Trending**: Cross-source consensus on widely referenced topics
 4. **Deep Cuts**: Hidden gems from specialized sources
 5. **Research**: Academic papers and technical reports
 6. **Ecosystem**: Industry analysis and market intelligence
@@ -109,109 +95,63 @@ The Newsletter Digest Bot is designed to be an **elite AI-powered news intellige
 ## Success Metrics
 
 ### Quality Metrics
-- **Signal Quality Score**: User rating of insight value and relevance
-- **Time to Impact**: How quickly users act on information received
-- **Accuracy Rate**: Prediction accuracy for trend identification
-- **Expert Coverage**: Percentage of content from recognized authorities
-- **Uniqueness Score**: Content not available in mainstream sources
+- User rating of insight value and relevance
+- How quickly users act on information received
+- Prediction accuracy for trend identification
+- Percentage of content from trusted sources
+- Uniqueness of surfaced content
 
 ### Engagement Metrics
-- **Deep Engagement**: Time spent reading vs. skimming
-- **Action Rate**: Percentage of insights that drive user action
-- **Retention**: Daily/weekly active usage by elite users
-- **Word of Mouth**: Organic referrals from satisfied users
-- **Premium Conversion**: Willingness to pay for premium features
+- Time spent reading vs. skimming
+- Percentage of insights that drive user action
+- Daily/weekly active usage
+- Organic referrals from satisfied users
+- Willingness to keep using the tool
 
-### Business Metrics
-- **User LTV**: Lifetime value of premium subscribers
-- **Content ROI**: Value generated per source/insight
-- **Market Position**: Recognition as the go-to platform for tech intelligence
-- **Network Effects**: Attraction of high-value sources and users
+### Utility Metrics
+- Time saved compared to manual newsletter reading
+- Number of duplicate or low-value items filtered out
+- Number of new sources/topics discovered
 
 ## Competitive Differentiation
 
-### vs. Mainstream News (TechCrunch, Ars Technica)
-- **Depth**: Technical insights vs. surface-level reporting
-- **Timing**: Early signals vs. after-the-fact coverage
-- **Sources**: Industry insiders vs. press releases
+### vs. Mainstream News
+- More technical depth and context
+- Surfaces what is being referenced, not just what is published
+- Focused on your sources and interests
 
-### vs. Aggregators (Hacker News, Reddit)
-- **Curation**: AI-powered vs. crowd-sourced
-- **Quality**: Expert validation vs. popularity-based
-- **Personalization**: Adaptive vs. one-size-fits-all
+### vs. Aggregators
+- AI-powered grouping and summarization
+- Quality and context over popularity
+- Personalized filtering
 
-### vs. Premium Services (Stratechery, a16z)
-- **Breadth**: Multi-source synthesis vs. single perspective
-- **Real-time**: Continuous updates vs. periodic analysis
-- **Personalization**: Tailored to individual vs. general audience
+### vs. Premium Services
+- Multi-source synthesis
+- Real-time updates
+- Tailored to individual use, not a general audience
 
-## Technology Requirements
-
-### AI/ML Capabilities
-- **Content Classification**: Technical depth, impact potential, expertise level
-- **Source Authority**: Dynamic credibility scoring and validation
-- **Trend Detection**: Pattern recognition across multiple dimensions
-- **Personalization**: Individual preference learning and adaptation
-- **Quality Assessment**: Automated screening for high-value content
-
-### Infrastructure Needs
-- **Real-time Processing**: Sub-minute content ingestion and analysis
-- **Scalable Architecture**: Support for millions of items and thousands of sources
-- **Global Deployment**: Low-latency access worldwide
-- **Security**: Enterprise-grade data protection and privacy
-- **API Integration**: Seamless connection to productivity tools
-
-## Roadmap
-
-### Phase 1: Foundation (Months 1-3)
-- Fix critical bugs and performance issues
-- Implement elite source curation
-- Build advanced content intelligence
-- Deploy improved trend detection
-
-### Phase 2: Intelligence (Months 4-6)
-- Launch personalization engine
-- Add breakthrough detection
-- Implement quality scoring
-- Build expert network
-
-### Phase 3: Premium Experience (Months 7-9)
-- Deploy mobile-optimized interface
-- Add research assistant features
-- Implement knowledge graphs
-- Launch premium subscription
-
-### Phase 4: Ecosystem (Months 10-12)
-- API for enterprise integration
-- Community features for experts
-- Advanced analytics and insights
-- Global expansion and partnerships
+## Technology Requirements (Product Perspective)
+- **Authentication:** OAuth with Gmail for secure newsletter access
+- **Frontend:** Next.js/React with mobile-first design
+- **Storage:** Supabase for user preferences, news items, digests, and vectorized metadata
+- **AI:** OpenAI GPT for content processing, topic/entity extraction, and summarization
+- **Newsletter Filtering:** Only emails from user-approved newsletter sources (or matching newsletter heuristics) are processed. Already-processed emails are never reprocessed
+- **Granularity:** All processing, storage, and UI is at the news item level, not the email level
 
 ## Risk Mitigation
 
 ### Technical Risks
-- **AI Quality**: Rigorous testing and human validation loops
-- **Scale**: Gradual rollout with performance monitoring
-- **Data Quality**: Multiple validation layers and source verification
+- AI quality: Testing and human validation
+- Scale: Gradual rollout with performance monitoring
+- Data quality: Multiple validation layers and source verification
 
-### Business Risks
-- **Competition**: Focus on unique value proposition and network effects
-- **Monetization**: Freemium model with clear premium value
-- **User Acquisition**: Target quality over quantity from launch
-
-### Operational Risks
-- **Content Moderation**: Automated and human review processes
-- **Legal**: Compliance with data protection and content rights
-- **Support**: Proactive user success and technical support
+### Other Risks
+- Competition: Focus on unique value and utility
+- User acquisition: Build for personal utility first
+- Content moderation: Automated and human review as needed
+- Legal: Compliance with data protection and content rights
+- Support: Proactive user support
 
 ## Conclusion
 
-The Newsletter Digest Bot has the potential to become the definitive intelligence platform for tech leaders. Success requires:
-
-1. **Radical focus on quality** over quantity
-2. **Deep understanding** of elite user needs
-3. **Advanced AI** that truly understands content value
-4. **Exceptional execution** across all touchpoints
-5. **Continuous evolution** based on user feedback and industry changes
-
-The opportunity is significant: capturing just 1% of senior tech decision-makers would create a highly valuable and sustainable business while delivering unprecedented value to the innovation ecosystem.
+The Newsletter Digest Bot is a personal productivity tool to help you keep up with important news and insights from your favorite sources and the broader industry. The focus is on clarity, utility, and saving you time—no hype, just the information you care about, delivered efficiently.

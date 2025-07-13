@@ -1,5 +1,5 @@
-const { supabase } = require('../utils/supabase');
-const { StoryClusteringEngine } = require('../utils/storyCluster');
+const { supabase } = require('../../lib/supabase.node');
+const { StoryClusteringEngine } = require('../../api/utils/storyCluster');
 
 const clusteringEngine = new StoryClusteringEngine();
 
@@ -7,7 +7,7 @@ const clusteringEngine = new StoryClusteringEngine();
  * API endpoint for Top Referenced News - stories mentioned across multiple sources
  * GET /api/headlines/top-referenced
  */
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -30,14 +30,7 @@ export default async function handler(req, res) {
     // Get top referenced stories from story_mentions table
     const { data: topStories, error: storiesError } = await supabase
       .from('story_mentions')
-      .select(`
-        *,
-        news_items:news_item_ids (
-          id, title, summary, newsletters:newsletter_id (
-            sender_name, sender_email, subject, received_date
-          )
-        )
-      `)
+      .select('*')
       .eq('user_id', user_id)
       .gte('last_mentioned_at', periodStart)
       .gte('mention_count', min_mentions)
@@ -47,6 +40,27 @@ export default async function handler(req, res) {
     if (storiesError) {
       console.error('Error fetching top stories:', storiesError);
       return res.status(500).json({ error: 'Failed to fetch top referenced news' });
+    }
+
+    // Fetch related news items for all top stories in one query
+    const storyIds = topStories.map(story => story.id);
+    let newsItemsByStory = {};
+    if (storyIds.length > 0) {
+      const { data: joinRows, error: joinError } = await supabase
+        .from('story_mention_news_items')
+        .select('story_mention_id, news_item_id, news_items!inner(id, title, summary, newsletter_id)')
+        .in('story_mention_id', storyIds);
+      if (joinError) {
+        console.error('Error fetching related news items:', joinError);
+        newsItemsByStory = {};
+      } else {
+        // Group news items by story_mention_id
+        newsItemsByStory = joinRows.reduce((acc, row) => {
+          if (!acc[row.story_mention_id]) acc[row.story_mention_id] = [];
+          acc[row.story_mention_id].push(row.news_items);
+          return acc;
+        }, {});
+      }
     }
 
     // Format response for frontend
@@ -63,7 +77,8 @@ export default async function handler(req, res) {
       last_updated: story.last_mentioned_at,
       trend_analysis: story.trend_analysis,
       impact_assessment: story.impact_assessment,
-      key_entities: story.key_entities || {}
+      key_entities: story.key_entities || {},
+      news_items: newsItemsByStory[story.id] || []
     }));
 
     const response = {
@@ -142,13 +157,12 @@ async function updateExistingStory(existingStory, newsItem) {
     // Calculate importance score
     const importanceScore = clusteringEngine.calculateImportanceScore(newsItem, sourceInfo);
 
-    // Update story_mentions table
+    // Update story_mentions table (no news_item_ids)
     const { error: updateError } = await supabase
       .from('story_mentions')
       .update({
         mention_count: existingStory.mention_count + 1,
         mentioning_sources: [...(existingStory.mentioning_sources || []), sourceInfo],
-        news_item_ids: [...(existingStory.news_item_ids || []), newsItem.id],
         importance_score: Math.max(existingStory.importance_score || 0, importanceScore),
         last_mentioned_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -158,6 +172,13 @@ async function updateExistingStory(existingStory, newsItem) {
     if (updateError) {
       console.error('Error updating existing story:', updateError);
     } else {
+      // Insert into join table
+      await supabase
+        .from('story_mention_news_items')
+        .insert({
+          story_mention_id: existingStory.id,
+          news_item_id: newsItem.id
+        });
       console.log(`Updated story: ${existingStory.canonical_title} (${existingStory.mention_count + 1} mentions)`);
     }
 
@@ -190,14 +211,13 @@ async function createNewStory(userId, newsItem) {
       canonical_title: newsItem.title,
       canonical_summary: newsItem.summary,
       mention_count: 1,
-      mentioning_sources: [sourceInfo],
-      news_item_ids: [newsItem.id]
+      mentioning_sources: [sourceInfo]
     };
 
     const analysis = await clusteringEngine.generateStoryAnalysis(storyData);
 
     // Insert new story
-    const { error: insertError } = await supabase
+    const { data: insertedStory, error: insertError } = await supabase
       .from('story_mentions')
       .insert({
         user_id: userId,
@@ -206,7 +226,6 @@ async function createNewStory(userId, newsItem) {
         canonical_summary: newsItem.summary,
         mention_count: 1,
         mentioning_sources: [sourceInfo],
-        news_item_ids: [newsItem.id],
         trend_analysis: analysis.trend_analysis,
         impact_assessment: analysis.impact_assessment,
         key_entities: analysis.key_entities,
@@ -215,11 +234,20 @@ async function createNewStory(userId, newsItem) {
         velocity_score: 1.0, // First mention
         first_mentioned_at: new Date().toISOString(),
         last_mentioned_at: new Date().toISOString()
-      });
+      })
+      .select()
+      .single();
 
     if (insertError) {
       console.error('Error creating new story:', insertError);
     } else {
+      // Insert into join table
+      await supabase
+        .from('story_mention_news_items')
+        .insert({
+          story_mention_id: insertedStory.id,
+          news_item_id: newsItem.id
+        });
       console.log(`Created new story: ${newsItem.title}`);
     }
 
@@ -275,4 +303,4 @@ async function updateTrendingScores(userId) {
   }
 }
 
-module.exports = { processNewsItemsForStories };
+exports.processNewsItemsForStories = processNewsItemsForStories;

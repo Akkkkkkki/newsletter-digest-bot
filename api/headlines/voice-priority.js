@@ -1,10 +1,10 @@
-const { supabase } = require('../utils/supabase');
+const { supabase } = require('../../lib/supabase.node');
 
 /**
  * Update voice priority for a source
  * PUT /api/headlines/voice-priority
  */
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'PUT') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

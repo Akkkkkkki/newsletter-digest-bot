@@ -1,11 +1,11 @@
-const { supabase } = require('../utils/supabase');
-const { GmailService } = require('../utils/gmail');
-const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../utils/openai');
+const { supabase } = require('../../lib/supabase.node');
+const { GmailService } = require('../../lib/gmail');
+const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../../lib/openai');
 const { processNewsItemsForStories } = require('../headlines/top-referenced');
 const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 const { NEWSLETTER_DEFAULTS: CONFIG_DEFAULTS } = require('../../lib/config');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

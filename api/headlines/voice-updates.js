@@ -1,10 +1,10 @@
-const { supabase } = require('../utils/supabase');
+const { supabase } = require('../../lib/supabase.node');
 
 /**
  * API endpoint for Voice Updates - latest content from prioritized sources
  * GET /api/headlines/voice-updates
  */
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -328,5 +328,3 @@ Focus on:
     console.error('Error updating source expertise:', error);
   }
 }
-
-module.exports = { updateVoicePriority, updateSourceExpertise };

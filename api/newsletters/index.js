@@ -1,7 +1,7 @@
-const { supabase } = require('../utils/supabase');
+const { supabase } = require('../../lib/supabase.node');
 const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
