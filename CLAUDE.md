@@ -293,3 +293,36 @@ The code demonstrates strong understanding of modern web development patterns an
 **Current Status**: ✅ Phase 1 security improvements completed. Ready for Phase 2 stability improvements (testing, monitoring, code organization).
 
 **For Production Use**: The application is now safe for deployment with the friend group, with proper rate limiting, input validation, secure token storage, and error handling in place.
+
+---
+
+## 🚀 Deployment Notes & Common Issues
+
+### Vercel Deployment Issue (2025-08-29)
+
+**Issue**: Build failed due to missing `lib/` files with Module not found errors:
+```
+Module not found: Can't resolve '@/lib/supabase'
+Module not found: Can't resolve '@/lib/config'
+```
+
+**Root Cause**: The `lib/` directory was in `.gitignore`, causing essential files like `lib/supabase.ts`, `lib/config.js`, `lib/types.ts`, and `lib/gmail.js` to be excluded from the repository.
+
+**Fix Applied**: Force-added required lib files using `git add -f lib/*.{ts,js}` to ensure deployment has all dependencies.
+
+**For Developers**: 
+- Always verify that imported files are committed to the repository
+- Check that `.gitignore` isn't excluding essential application files
+- Test builds locally with `npm run build` before deploying
+- If you add new files to `lib/`, use `git add -f` to override gitignore when necessary
+
+### Essential Lib Files for Deployment
+These files must be present for successful deployment:
+- `lib/supabase.ts` - Client-side Supabase configuration
+- `lib/config.js` - Application configuration constants  
+- `lib/types.ts` - TypeScript type definitions
+- `lib/gmail.js` - Gmail API integration
+- `lib/openai.js` - OpenAI API wrapper with rate limiting
+- `lib/validation.js` - Input validation utilities
+- `lib/rateLimiter.js` - Rate limiting implementation
+- `lib/tokenStorage.ts` - Secure token storage utilities
