@@ -436,7 +436,7 @@ Module not found: Can't resolve '@/lib/config'
 - Test builds locally with `npm run build` before deploying
 - If you add new files to `lib/`, use `git add -f` to override gitignore when necessary
 
-### Supabase Environment Variable Issue (2025-08-29)
+### Supabase Environment Variable Issue (2025-08-29) - CORRECTED
 
 **Issue**: Build failed during static page generation with error:
 ```
@@ -444,20 +444,21 @@ Error: supabaseUrl is required.
 Error occurred prerendering page "/"
 ```
 
-**Root Cause**: The Supabase client was being initialized at module level with required environment variables that aren't available during build-time static generation.
+**Root Cause**: Environment variable naming inconsistency between local development and Vercel deployment. Vercel was missing the `NEXT_PUBLIC_` prefixed environment variables that the client-side code requires.
 
-**Fix Applied**: Modified `lib/supabase.ts` to use fallback values for missing environment variables during build:
-```typescript
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseAnonKey || 'placeholder-key'
-);
-```
+**Fix Applied**: The issue was NOT with the code - it was with environment variable configuration in Vercel.
+
+**CRITICAL: Environment Variable Setup for Vercel Deployment**:
+Vercel must have these environment variables configured in the dashboard:
+- `NEXT_PUBLIC_SUPABASE_URL` - The Supabase project URL (client-side accessible)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - The Supabase anonymous key (client-side accessible)
+- `NEXT_PUBLIC_GMAIL_CLIENT_ID` - Gmail OAuth client ID (client-side accessible)
 
 **For Developers**:
-- Environment variables prefixed with `NEXT_PUBLIC_` are available to the browser but not guaranteed during build
-- Use fallback values for client initialization when environment variables may be missing
-- Test builds locally with `npm run build` to catch static generation issues
+- `NEXT_PUBLIC_` prefixed variables are accessible to browser/client code and required for static generation
+- DO NOT create placeholder logic - fix the environment variable configuration instead
+- Always ensure Vercel environment variables match the variable names used in the code
+- Test builds locally with `npm run build` but remember local .env.local may have different variable names than production
 
 ### Essential Lib Files for Deployment
 These files must be present for successful deployment:
@@ -474,34 +475,36 @@ These files must be present for successful deployment:
 
 ## 📝 **DEVELOPMENT SESSION LOGS**
 
-### Development Session - 2025-08-29 - Claude Code (Environment Variable Build Fix)
+### Development Session - 2025-08-29 - Claude Code (Environment Variable Fix - CORRECTED)
 
 #### Changes Made
-- [x] Bug fixes - Fixed Supabase client initialization error during static generation
-- [x] Refactoring - Modified lib/supabase.ts to handle missing environment variables gracefully  
-- [x] Documentation updates - Added deployment troubleshooting for environment variable issues
+- [x] Bug fixes - CORRECTED approach to Supabase environment variable issue
+- [x] Refactoring - REMOVED unnecessary placeholder logic from lib/supabase.ts
+- [x] Documentation updates - Updated deployment troubleshooting with correct root cause and solution
 
 #### Simplicity Review
-- [x] Removed any unnecessary complexity - Simple fallback approach for missing env vars
-- [x] Followed existing patterns - Maintained existing Supabase client export pattern
-- [x] Avoided overengineering - Used basic placeholder values instead of complex initialization logic
-- [x] Code is readable and maintainable - Clear fallback values that explain themselves
+- [x] Removed any unnecessary complexity - ELIMINATED placeholder logic that was the wrong solution
+- [x] Followed existing patterns - Restored proper environment variable usage without fallbacks
+- [x] Avoided overengineering - Fixed root cause (env var config) instead of adding code workarounds
+- [x] Code is readable and maintainable - Clean client initialization without unnecessary logic
 
 #### Quality Checks Completed  
-- [x] `npm run build` passed locally - ✅ Build now succeeds without environment variable errors
-- [x] Manual testing completed - ✅ Verified app still works in development with real env vars
-- [x] All imports resolve correctly - ✅ No changes to import structure
+- [x] `npm run build` passed locally - ✅ Build succeeds with proper environment variable names
+- [x] Manual testing completed - ✅ App works correctly with proper configuration
+- [x] All imports resolve correctly - ✅ Clean client-side Supabase initialization
 
 #### Issues Encountered & Solutions
-- Issue 1: Vercel deployment failed with "supabaseUrl is required" during static generation → Solution: Added fallback values to handle missing environment variables during build time
+- Issue 1: Initially implemented wrong solution (placeholder logic) → Solution: Identified real issue is Vercel environment variable configuration, not code
+- Issue 2: Vercel missing NEXT_PUBLIC_ prefixed environment variables → Solution: Document proper Vercel environment variable setup
 
 #### Next Steps / Priority Changes  
-- [x] Updated CLAUDE.md with deployment fix documentation
-- [x] Documented the environment variable handling pattern for future developers
+- [x] Updated CLAUDE.md with CORRECT deployment troubleshooting
+- [x] Documented that Vercel needs NEXT_PUBLIC_ prefixed variables for client-side code
+- [x] Removed misleading information about placeholder patterns
 
 #### PR Details
 - Branch: security-improvements (continuing existing PR)
-- Fix will be pushed as additional commit to existing PR
+- Correction will be pushed as additional commit
 
 ### Development Session - 2025-08-29 - Claude Code (Security Hardening)
 
