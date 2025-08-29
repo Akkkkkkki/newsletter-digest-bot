@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+  require('dotenv').config({ path: '.env.local' });
+}
 const { supabase } = require('../../lib/supabase.node');
 const { synthesizeDigestSummary } = require('../../lib/openai');
 
@@ -67,4 +70,16 @@ module.exports = async function handler(req, res) {
     console.error('Digest synthesis error:', error);
     return res.status(500).json({ error: 'Digest synthesis failed' });
   }
+}
+
+if (require.main === module) {
+  // Test: POST with missing user_id
+  const req1 = { method: 'POST', body: {} };
+  const res1 = { status: code => ({ json: obj => console.log('Test1:', code, obj) }) };
+  module.exports(req1, res1);
+
+  // Test: wrong method
+  const req2 = { method: 'GET', body: {} };
+  const res2 = { status: code => ({ json: obj => console.log('Test2:', code, obj) }) };
+  module.exports(req2, res2);
 } 

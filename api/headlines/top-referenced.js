@@ -216,6 +216,10 @@ async function createNewStory(userId, newsItem) {
 
     const analysis = await clusteringEngine.generateStoryAnalysis(storyData);
 
+    // Generate embedding for the story for future clustering
+    const { generateEmbedding } = require('../../lib/openai');
+    const storyEmbedding = await generateEmbedding(newsItem.title + ' ' + (newsItem.summary || ''));
+
     // Insert new story
     const { data: insertedStory, error: insertError } = await supabase
       .from('story_mentions')
@@ -232,6 +236,7 @@ async function createNewStory(userId, newsItem) {
         importance_score: importanceScore,
         trending_score: importanceScore, // Initial trending score
         velocity_score: 1.0, // First mention
+        embedding: storyEmbedding, // Store embedding for clustering
         first_mentioned_at: new Date().toISOString(),
         last_mentioned_at: new Date().toISOString()
       })

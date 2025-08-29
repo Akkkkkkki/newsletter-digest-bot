@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+  require('dotenv').config({ path: '.env.local' });
+}
 const { supabase } = require('../../lib/supabase.node');
 const { CONSENSUS_DEFAULTS } = require('../../lib/config');
 
@@ -149,4 +152,21 @@ module.exports = async function handler(req, res) {
       max_per_query: maxPerQuery
     }
   });
+}
+
+if (require.main === module) {
+  // Test: GET with missing user_id
+  const req1 = { method: 'GET', query: { period_start: '2024-01-01', period_end: '2024-01-07' } };
+  const res1 = { status: code => ({ json: obj => console.log('Test1:', code, obj) }) };
+  module.exports(req1, res1);
+
+  // Test: GET with missing period_start/period_end
+  const req2 = { method: 'GET', query: { user_id: 'test' } };
+  const res2 = { status: code => ({ json: obj => console.log('Test2:', code, obj) }) };
+  module.exports(req2, res2);
+
+  // Test: wrong method
+  const req3 = { method: 'POST', query: { user_id: 'test', period_start: '2024-01-01', period_end: '2024-01-07' } };
+  const res3 = { status: code => ({ json: obj => console.log('Test3:', code, obj) }) };
+  module.exports(req3, res3);
 } 

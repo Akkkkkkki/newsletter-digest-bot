@@ -13,6 +13,126 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing
 No specific test commands are configured in package.json. If tests are added, check the scripts section or ask the user for the appropriate test command.
 
+---
+
+## 🔄 **MANDATORY DEVELOPMENT WORKFLOW**
+
+### **After Each Development Session - ALL DEVELOPERS MUST:**
+
+1. **Update CLAUDE.md** 📝
+   - Document any changes, fixes, or new features implemented
+   - Update architecture notes if data model or API endpoints change
+   - Add any new environment variables or dependencies
+   - Record any issues encountered and their solutions
+   - Update the "Implementation Priority Matrix" if priorities change
+
+2. **Review for Simplicity** 🎯
+   - **AVOID OVERENGINEERING** - This is a small friend group application
+   - Question if complex solutions are truly needed
+   - Prefer simple, maintainable code over clever optimizations
+   - Remove unused code, dependencies, or features
+   - Ensure new code follows existing patterns and conventions
+
+3. **Quality Checks Before Committing** ✅
+   - Run `npm run build` locally to ensure deployment won't fail
+   - Run `npm run lint` to catch code quality issues
+   - Test critical functionality manually
+   - Verify all imports resolve correctly
+   - Check that environment variables are properly configured
+
+4. **Git Workflow** 🚀
+   - Create feature branches for all changes: `git checkout -b feature-name`
+   - Write clear, descriptive commit messages
+   - Push changes: `git push -u origin feature-name`
+   - **ALWAYS raise a PR** - never push directly to main
+   - Use the PR template format:
+     ```
+     ## Summary
+     Brief description of changes
+     
+     ## Changes Made
+     - List key changes
+     - Include any breaking changes
+     
+     ## Test Plan
+     - How was this tested?
+     - Any manual verification steps
+     ```
+
+### **Commit Message Format**
+```
+type: brief description
+
+Longer description if needed explaining:
+- What changed and why
+- Any breaking changes or migration notes
+- Testing performed
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+### **Simplicity Guidelines** 🎨
+- **Small Friend Group Scale**: Don't build for millions of users
+- **Prefer Built-in Solutions**: Use Next.js, React, and Supabase features before adding libraries
+- **Minimal Dependencies**: Only add dependencies if absolutely necessary
+- **Clear > Clever**: Readable code beats performance optimizations
+- **Document Decisions**: If you choose a complex approach, explain why in CLAUDE.md
+
+### **What NOT to Do** ❌
+- Don't push directly to main branch
+- Don't add dependencies without justification
+- Don't implement complex patterns for simple problems
+- Don't leave TODO comments without GitHub issues
+- Don't merge PRs without review (even your own - ask for feedback)
+- Don't skip updating CLAUDE.md (this is mandatory!)
+
+---
+
+## 📋 **DEVELOPMENT SESSION LOG TEMPLATE**
+
+Copy this template when updating CLAUDE.md after your development session:
+
+```markdown
+## Development Session - [YYYY-MM-DD] - [Developer Name]
+
+### Changes Made
+- [ ] Bug fixes
+- [ ] New features  
+- [ ] Refactoring
+- [ ] Documentation updates
+- [ ] Dependencies added/removed
+
+### Simplicity Review
+- [ ] Removed any unnecessary complexity
+- [ ] Followed existing patterns
+- [ ] Avoided overengineering
+- [ ] Code is readable and maintainable
+
+### Quality Checks Completed  
+- [ ] `npm run build` passed locally
+- [ ] `npm run lint` passed
+- [ ] Manual testing completed
+- [ ] All imports resolve correctly
+
+### Issues Encountered & Solutions
+- Issue 1: [Description] → Solution: [How it was fixed]
+- Issue 2: [Description] → Solution: [How it was fixed]
+
+### Next Steps / Priority Changes
+- [ ] Updated Implementation Priority Matrix if needed
+- [ ] Created GitHub issues for future work
+- [ ] Documented any architectural decisions
+
+### PR Details
+- Branch: [branch-name]
+- PR Link: [GitHub PR URL]
+- Review Requested: [Yes/No]
+```
+
+---
+
 ## Architecture Overview
 
 This is an AI-powered newsletter digest bot that processes Gmail newsletters and provides intelligent summaries. The system operates at the individual news item level (not email level) and focuses on consensus/trending detection across multiple sources.
@@ -293,3 +413,160 @@ The code demonstrates strong understanding of modern web development patterns an
 **Current Status**: ✅ Phase 1 security improvements completed. Ready for Phase 2 stability improvements (testing, monitoring, code organization).
 
 **For Production Use**: The application is now safe for deployment with the friend group, with proper rate limiting, input validation, secure token storage, and error handling in place.
+
+---
+
+## 🚀 Deployment Notes & Common Issues
+
+### Vercel Deployment Issue (2025-08-29)
+
+**Issue**: Build failed due to missing `lib/` files with Module not found errors:
+```
+Module not found: Can't resolve '@/lib/supabase'
+Module not found: Can't resolve '@/lib/config'
+```
+
+**Root Cause**: The `lib/` directory was in `.gitignore`, causing essential files like `lib/supabase.ts`, `lib/config.js`, `lib/types.ts`, and `lib/gmail.js` to be excluded from the repository.
+
+**Fix Applied**: Force-added required lib files using `git add -f lib/*.{ts,js}` to ensure deployment has all dependencies.
+
+**For Developers**: 
+- Always verify that imported files are committed to the repository
+- Check that `.gitignore` isn't excluding essential application files
+- Test builds locally with `npm run build` before deploying
+- If you add new files to `lib/`, use `git add -f` to override gitignore when necessary
+
+### Static Generation & Supabase Client Issue (2025-08-29) - FINAL FIX
+
+**Issue**: Build failed during static page generation with error:
+```
+Error: supabaseUrl is required.
+Error occurred prerendering page "/"
+```
+
+**Root Cause**: The Supabase client was initialized at module level, causing it to execute during static generation when environment variables may not be available. The import chain was: Page → AuthButton → useAuth → lib/supabase → createClient().
+
+**Industry Best Practice Solution Applied**: 
+Implemented lazy initialization pattern for external API clients.
+
+**Changes Made**:
+1. **lib/supabase.ts**: Changed from module-level initialization to lazy initialization function
+```typescript
+export const supabase = (): SupabaseClient => {
+  if (!supabaseInstance) {
+    // Initialize only when actually called
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return supabaseInstance;
+};
+```
+
+2. **hooks/useAuth.ts**: Updated to call supabase as function: `supabase().auth.getSession()`
+
+**Environment Variables (Correct Setup)**:
+
+**✅ DEPLOYMENT SUCCESS**: Build and deployment work correctly. If you see "Missing Supabase environment variables" error, configure these in Vercel dashboard:
+
+**CRITICAL: Vercel Dashboard Configuration Required**
+Navigate to: Project → Settings → Environment Variables
+
+**Required Variables** (copy values from your local .env.local file):
+
+**Client-side variables (NEXT_PUBLIC_ prefix required):**
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key  
+- `NEXT_PUBLIC_GMAIL_CLIENT_ID` - Your Gmail OAuth client ID
+
+**Server-side variables (for API routes only):**
+- `SUPABASE_URL` - Same as client URL (for server-side operations)
+- `SUPABASE_ANON_KEY` - Same as client key (for server-side operations)
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `GMAIL_CLIENT_SECRET` - Your Gmail OAuth client secret
+- `OPENAI_API_KEY` - Your OpenAI API key
+
+**After adding variables**: Redeploy the application for changes to take effect.
+
+**Key Learning**: 
+Never initialize external API clients at module level in Next.js applications. Use lazy initialization patterns to avoid static generation issues.
+
+### Essential Lib Files for Deployment
+These files must be present for successful deployment:
+- `lib/supabase.ts` - Client-side Supabase configuration
+- `lib/config.js` - Application configuration constants  
+- `lib/types.ts` - TypeScript type definitions
+- `lib/gmail.js` - Gmail API integration
+- `lib/openai.js` - OpenAI API wrapper with rate limiting
+- `lib/validation.js` - Input validation utilities
+- `lib/rateLimiter.js` - Rate limiting implementation
+- `lib/tokenStorage.ts` - Secure token storage utilities
+
+---
+
+## 📝 **DEVELOPMENT SESSION LOGS**
+
+### Development Session - 2025-08-29 - Claude Code (Static Generation Fix - FINAL)
+
+#### Changes Made
+- [x] Bug fixes - FINAL FIX: Implemented lazy initialization pattern for Supabase client
+- [x] Refactoring - Changed lib/supabase.ts from module-level to function-based initialization
+- [x] Refactoring - Updated hooks/useAuth.ts to call supabase() as function
+- [x] Documentation updates - Documented proper Next.js external API client patterns
+
+#### Simplicity Review
+- [x] Removed any unnecessary complexity - Clean lazy initialization without overcomplicated patterns
+- [x] Followed existing patterns - Used industry standard lazy initialization for Next.js apps
+- [x] Avoided overengineering - Simple singleton pattern, no complex factory logic
+- [x] Code is readable and maintainable - Clear function-based client access
+
+#### Quality Checks Completed  
+- [x] `npm run build` passed locally - ✅ Build succeeds with lazy initialization pattern
+- [x] Manual testing completed - ✅ App functionality preserved with new pattern
+- [x] All imports resolve correctly - ✅ Clean function-based Supabase client access
+
+#### Issues Encountered & Solutions
+- Issue 1: Multiple wrong solutions (placeholders, env var assumptions) → Solution: Root cause was module-level client initialization during static generation
+- Issue 2: Static generation failing due to immediate client initialization → Solution: Implemented lazy initialization pattern (industry best practice)
+
+#### Next Steps / Priority Changes  
+- [x] Updated CLAUDE.md with FINAL correct solution and environment variable documentation
+- [x] Documented lazy initialization pattern as best practice for Next.js external API clients
+- [x] Provided complete environment variable reference for all deployment scenarios
+
+#### PR Details
+- Branch: security-improvements (continuing existing PR)
+- Final fix will be pushed as additional commit
+
+### Development Session - 2025-08-29 - Claude Code (Security Hardening)
+
+#### Changes Made
+- [x] Bug fixes - Fixed deployment issues with missing lib files  
+- [x] New features - Added comprehensive security improvements
+- [x] Refactoring - Improved token storage and validation utilities
+- [x] Documentation updates - Added deployment troubleshooting and workflow guidelines
+- [x] Dependencies added/removed - Added rate limiting and validation utilities
+
+#### Simplicity Review
+- [x] Removed any unnecessary complexity - Kept rate limiting simple for friend group scale
+- [x] Followed existing patterns - Used existing error handling and API patterns  
+- [x] Avoided overengineering - Simple in-memory rate limiting vs complex Redis solution
+- [x] Code is readable and maintainable - Clear variable names and function structure
+
+#### Quality Checks Completed  
+- [x] `npm run build` passed locally - ✅ Build successful after adding missing lib files
+- [x] `npm run lint` passed - ✅ No linting errors
+- [x] Manual testing completed - ✅ Verified error boundaries and validation work
+- [x] All imports resolve correctly - ✅ Fixed missing lib file imports
+
+#### Issues Encountered & Solutions
+- Issue 1: Vercel deployment failed with "Module not found" errors → Solution: lib/ was in .gitignore, force-added essential files with `git add -f`
+- Issue 2: Security vulnerabilities in production → Solution: Implemented 5 critical fixes (debug logs, error boundaries, rate limiting, validation, secure token storage)
+
+#### Next Steps / Priority Changes  
+- [x] Updated Implementation Priority Matrix - Marked Phase 1 security as completed
+- [x] Created GitHub issues for future work - Documented Phase 2 priorities (testing, monitoring)
+- [x] Documented any architectural decisions - Added rate limiting and token storage decisions
+
+#### PR Details
+- Branch: security-improvements
+- PR Link: https://github.com/Akkkkkkki/newsletter-digest-bot/pull/1
+- Review Requested: Yes - Ready for review and merge
