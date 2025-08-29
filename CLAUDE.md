@@ -13,6 +13,126 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing
 No specific test commands are configured in package.json. If tests are added, check the scripts section or ask the user for the appropriate test command.
 
+---
+
+## 🔄 **MANDATORY DEVELOPMENT WORKFLOW**
+
+### **After Each Development Session - ALL DEVELOPERS MUST:**
+
+1. **Update CLAUDE.md** 📝
+   - Document any changes, fixes, or new features implemented
+   - Update architecture notes if data model or API endpoints change
+   - Add any new environment variables or dependencies
+   - Record any issues encountered and their solutions
+   - Update the "Implementation Priority Matrix" if priorities change
+
+2. **Review for Simplicity** 🎯
+   - **AVOID OVERENGINEERING** - This is a small friend group application
+   - Question if complex solutions are truly needed
+   - Prefer simple, maintainable code over clever optimizations
+   - Remove unused code, dependencies, or features
+   - Ensure new code follows existing patterns and conventions
+
+3. **Quality Checks Before Committing** ✅
+   - Run `npm run build` locally to ensure deployment won't fail
+   - Run `npm run lint` to catch code quality issues
+   - Test critical functionality manually
+   - Verify all imports resolve correctly
+   - Check that environment variables are properly configured
+
+4. **Git Workflow** 🚀
+   - Create feature branches for all changes: `git checkout -b feature-name`
+   - Write clear, descriptive commit messages
+   - Push changes: `git push -u origin feature-name`
+   - **ALWAYS raise a PR** - never push directly to main
+   - Use the PR template format:
+     ```
+     ## Summary
+     Brief description of changes
+     
+     ## Changes Made
+     - List key changes
+     - Include any breaking changes
+     
+     ## Test Plan
+     - How was this tested?
+     - Any manual verification steps
+     ```
+
+### **Commit Message Format**
+```
+type: brief description
+
+Longer description if needed explaining:
+- What changed and why
+- Any breaking changes or migration notes
+- Testing performed
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+### **Simplicity Guidelines** 🎨
+- **Small Friend Group Scale**: Don't build for millions of users
+- **Prefer Built-in Solutions**: Use Next.js, React, and Supabase features before adding libraries
+- **Minimal Dependencies**: Only add dependencies if absolutely necessary
+- **Clear > Clever**: Readable code beats performance optimizations
+- **Document Decisions**: If you choose a complex approach, explain why in CLAUDE.md
+
+### **What NOT to Do** ❌
+- Don't push directly to main branch
+- Don't add dependencies without justification
+- Don't implement complex patterns for simple problems
+- Don't leave TODO comments without GitHub issues
+- Don't merge PRs without review (even your own - ask for feedback)
+- Don't skip updating CLAUDE.md (this is mandatory!)
+
+---
+
+## 📋 **DEVELOPMENT SESSION LOG TEMPLATE**
+
+Copy this template when updating CLAUDE.md after your development session:
+
+```markdown
+## Development Session - [YYYY-MM-DD] - [Developer Name]
+
+### Changes Made
+- [ ] Bug fixes
+- [ ] New features  
+- [ ] Refactoring
+- [ ] Documentation updates
+- [ ] Dependencies added/removed
+
+### Simplicity Review
+- [ ] Removed any unnecessary complexity
+- [ ] Followed existing patterns
+- [ ] Avoided overengineering
+- [ ] Code is readable and maintainable
+
+### Quality Checks Completed  
+- [ ] `npm run build` passed locally
+- [ ] `npm run lint` passed
+- [ ] Manual testing completed
+- [ ] All imports resolve correctly
+
+### Issues Encountered & Solutions
+- Issue 1: [Description] → Solution: [How it was fixed]
+- Issue 2: [Description] → Solution: [How it was fixed]
+
+### Next Steps / Priority Changes
+- [ ] Updated Implementation Priority Matrix if needed
+- [ ] Created GitHub issues for future work
+- [ ] Documented any architectural decisions
+
+### PR Details
+- Branch: [branch-name]
+- PR Link: [GitHub PR URL]
+- Review Requested: [Yes/No]
+```
+
+---
+
 ## Architecture Overview
 
 This is an AI-powered newsletter digest bot that processes Gmail newsletters and provides intelligent summaries. The system operates at the individual news item level (not email level) and focuses on consensus/trending detection across multiple sources.
