@@ -1,5 +1,4 @@
 import AuthButton from '@/components/AuthButton'
-import QuickScan from '@/components/QuickScan'
 import NewsletterDigest from '@/components/NewsletterDigest'
 
 export default function Home() {
@@ -14,7 +13,6 @@ export default function Home() {
       
       <main className="py-8">
         <NewsletterDigest />
-        <QuickScan />
       </main>
     </div>
   )

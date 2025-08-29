@@ -464,15 +464,27 @@ export const supabase = (): SupabaseClient => {
 2. **hooks/useAuth.ts**: Updated to call supabase as function: `supabase().auth.getSession()`
 
 **Environment Variables (Correct Setup)**:
-For Vercel deployment, configure these in the Vercel dashboard:
-- `NEXT_PUBLIC_SUPABASE_URL` - The Supabase project URL (client-side accessible)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - The Supabase anonymous key (client-side accessible)
-- `NEXT_PUBLIC_GMAIL_CLIENT_ID` - Gmail OAuth client ID (client-side accessible)
-- `SUPABASE_URL` - Server-side Supabase URL (API routes only)
-- `SUPABASE_ANON_KEY` - Server-side anonymous key (API routes only)
-- `SUPABASE_SERVICE_ROLE_KEY` - Admin access key (API routes only)
-- `GMAIL_CLIENT_SECRET` - Gmail OAuth secret (API routes only)
-- `OPENAI_API_KEY` - OpenAI API key (API routes only)
+
+**✅ DEPLOYMENT SUCCESS**: Build and deployment work correctly. If you see "Missing Supabase environment variables" error, configure these in Vercel dashboard:
+
+**CRITICAL: Vercel Dashboard Configuration Required**
+Navigate to: Project → Settings → Environment Variables
+
+**Required Variables** (copy values from your local .env.local file):
+
+**Client-side variables (NEXT_PUBLIC_ prefix required):**
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key  
+- `NEXT_PUBLIC_GMAIL_CLIENT_ID` - Your Gmail OAuth client ID
+
+**Server-side variables (for API routes only):**
+- `SUPABASE_URL` - Same as client URL (for server-side operations)
+- `SUPABASE_ANON_KEY` - Same as client key (for server-side operations)
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `GMAIL_CLIENT_SECRET` - Your Gmail OAuth client secret
+- `OPENAI_API_KEY` - Your OpenAI API key
+
+**After adding variables**: Redeploy the application for changes to take effect.
 
 **Key Learning**: 
 Never initialize external API clients at module level in Next.js applications. Use lazy initialization patterns to avoid static generation issues.

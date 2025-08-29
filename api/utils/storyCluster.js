@@ -64,12 +64,44 @@ class StoryClusteringEngine {
   }
 
   async generateStoryAnalysis(storyData) {
-    // Generate analysis (stub)
-    return {
-      trend_analysis: '',
-      impact_assessment: '',
-      key_entities: {}
-    };
+    try {
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      const prompt = `Analyze this news story cluster:
+
+Title: ${storyData.canonical_title}
+Summary: ${storyData.canonical_summary}
+Mentions: ${storyData.mention_count}
+Sources: ${storyData.mentioning_sources.map(s => s.name).join(', ')}
+
+Provide brief analysis in JSON format:
+{
+  "trend_analysis": "One sentence about the trend direction",
+  "impact_assessment": "One sentence about potential impact", 
+  "key_entities": {
+    "companies": ["company1", "company2"],
+    "people": ["person1"],
+    "products": ["product1"]
+  }
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      });
+
+      return JSON.parse(completion.choices[0].message.content);
+    } catch (error) {
+      console.error('Error generating story analysis:', error);
+      return {
+        trend_analysis: 'Analysis unavailable',
+        impact_assessment: 'Impact assessment unavailable',
+        key_entities: { companies: [], people: [], products: [] }
+      };
+    }
   }
 }
 
