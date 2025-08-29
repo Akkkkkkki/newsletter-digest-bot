@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
+import { tokenStorage } from '@/lib/tokenStorage'
 
 // This page only handles Gmail OAuth callback, not Supabase user authentication.
 // User authentication is handled by Supabase Auth elsewhere.
@@ -62,9 +63,9 @@ function AuthCallback() {
 
         const data = await response.json()
 
-        // Store the access and refresh tokens in localStorage
-        if (data.access_token) localStorage.setItem('gmail_access_token', data.access_token)
-        if (data.refresh_token) localStorage.setItem('gmail_refresh_token', data.refresh_token)
+        // Store the access and refresh tokens securely
+        if (data.access_token) tokenStorage.setToken('gmail_access', data.access_token, 1) // 1 hour for access token
+        if (data.refresh_token) tokenStorage.setToken('gmail_refresh', data.refresh_token, 24 * 7) // 1 week for refresh token
         
         // Redirect back to main page
         router.push('/')

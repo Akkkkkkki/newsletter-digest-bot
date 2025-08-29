@@ -1,9 +1,18 @@
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+  require('dotenv').config({ path: '.env.local' });
+}
 const { supabase } = require('../../lib/supabase.node');
+const { validation } = require('../../lib/validation');
 
 module.exports = async function handler(req, res) {
   const user_id = req.method === 'GET' ? req.query.user_id : req.body.user_id;
+  
+  // Validate user_id
   if (!user_id) {
     return res.status(400).json({ error: 'User ID required' });
+  }
+  if (!validation.isValidUuid(user_id)) {
+    return res.status(400).json({ error: 'Invalid user ID format' });
   }
 
   if (req.method === 'GET') {
@@ -23,6 +32,11 @@ module.exports = async function handler(req, res) {
     const { email_address, name, category, description } = req.body;
     if (!email_address) {
       return res.status(400).json({ error: 'Email address is required' });
+    }
+    
+    // Validate email format
+    if (!validation.isValidEmail(email_address)) {
+      return res.status(400).json({ error: 'Invalid email address format' });
     }
     // Upsert to avoid duplicates
     const { data, error } = await supabase
@@ -47,6 +61,11 @@ module.exports = async function handler(req, res) {
     if (!email_address) {
       return res.status(400).json({ error: 'Email address is required' });
     }
+    
+    // Validate email format
+    if (!validation.isValidEmail(email_address)) {
+      return res.status(400).json({ error: 'Invalid email address format' });
+    }
     const { error } = await supabase
       .from('newsletter_sources')
       .update({ is_active: false })
@@ -57,4 +76,16 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
+}
+
+if (require.main === module) {
+  // Test: GET with missing user_id
+  const req1 = { method: 'GET', query: {} };
+  const res1 = { status: code => ({ json: obj => console.log('Test1:', code, obj) }) };
+  module.exports(req1, res1);
+
+  // Test: POST with missing email_address
+  const req2 = { method: 'POST', body: { user_id: 'test' } };
+  const res2 = { status: code => ({ json: obj => console.log('Test2:', code, obj) }) };
+  module.exports(req2, res2);
 } 

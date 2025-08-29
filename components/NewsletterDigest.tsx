@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useNewsItems, useNewsletterSources } from '@/hooks/useNewsletters'
-import { Mail as MailIcon, Globe2, RefreshCw, Calendar, Tag, TrendingUp } from 'lucide-react'
+import { Mail as MailIcon, Globe2, RefreshCw, Calendar, Tag, TrendingUp, Users, Activity, Star, Clock, ExternalLink } from 'lucide-react'
 import type { NewsItem } from '@/lib/types'
 import { NEWSLETTER_DEFAULTS } from '@/lib/config'
+import { tokenStorage, migrateLegacyTokens } from '@/lib/tokenStorage'
 
 export default function NewsletterDigest() {
   const { user, connectGmail } = useAuth()
@@ -20,6 +21,13 @@ export default function NewsletterDigest() {
   const [periodEnd, setPeriodEnd] = useState<string>("")
   const [latestEmailDate, setLatestEmailDate] = useState<string>("")
   const [fetchError, setFetchError] = useState<string | null>(null)
+
+  // QuickScan state
+  const [activeTab, setActiveTab] = useState<'referenced' | 'voices'>('referenced');
+  const [topReferenced, setTopReferenced] = useState([]);
+  const [voiceUpdates, setVoiceUpdates] = useState([]);
+  const [tabLoading, setTabLoading] = useState(false);
+  const [tabError, setTabError] = useState<string | null>(null);
 
   // Fetch latest email date and set default date range
   useEffect(() => {
@@ -40,12 +48,79 @@ export default function NewsletterDigest() {
 
   useEffect(() => { if (user) fetchSources() }, [user])
   useEffect(() => {
-    // Load Gmail tokens from localStorage on mount
-    const accessToken = localStorage.getItem('gmail_access_token')
-    const refreshToken = localStorage.getItem('gmail_refresh_token')
+    // Migrate any legacy tokens and load Gmail tokens from secure storage
+    migrateLegacyTokens()
+    
+    const accessToken = tokenStorage.getToken('gmail_access')
+    const refreshToken = tokenStorage.getToken('gmail_refresh')
     if (accessToken) setGmailToken(accessToken)
     if (refreshToken) setGmailRefreshToken(refreshToken)
   }, [])
+
+  // Fetch existing news items when user and date range are set
+  useEffect(() => {
+    if (user && periodStart && periodEnd) {
+      fetchNewsItems(user.id, { startDate: periodStart, endDate: periodEnd })
+    }
+  }, [user, periodStart, periodEnd])
+
+  // Fetch QuickScan data on tab change
+  useEffect(() => {
+    if (!user) return;
+    if (activeTab === 'referenced') {
+      fetchTopReferenced();
+    } else {
+      fetchVoiceUpdates();
+    }
+    // eslint-disable-next-line
+  }, [user, activeTab]);
+
+  const fetchTopReferenced = async () => {
+    if (!user) return;
+    setTabLoading(true);
+    setTabError(null);
+    try {
+      const response = await fetch(`/api/headlines/top-referenced?user_id=${user.id}&period_hours=24&min_mentions=2&limit=15`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch top referenced stories');
+      setTopReferenced(data.headlines || []);
+    } catch (err: any) {
+      setTabError(err.message);
+      setTopReferenced([]);
+    } finally {
+      setTabLoading(false);
+    }
+  };
+
+  const fetchVoiceUpdates = async () => {
+    if (!user) return;
+    setTabLoading(true);
+    setTabError(null);
+    try {
+      const response = await fetch(`/api/headlines/voice-updates?user_id=${user.id}&period_hours=24&min_priority=1&limit=15`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch voice updates');
+      setVoiceUpdates(data.updates || []);
+    } catch (err: any) {
+      setTabError(err.message);
+      setVoiceUpdates([]);
+    } finally {
+      setTabLoading(false);
+    }
+  };
+
+  const updateVoicePriority = async (sourceId: string, priority: number) => {
+    try {
+      const response = await fetch('/api/headlines/voice-priority', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user?.id, source_id: sourceId, voice_priority: priority })
+      });
+      if (response.ok) fetchVoiceUpdates();
+    } catch (error) {
+      // silent fail
+    }
+  };
 
   // Helper: Validate email or domain
   function isValidEmail(email: string) {
@@ -223,69 +298,176 @@ export default function NewsletterDigest() {
           </div>
         </div>
       </aside>
-      {/* Main Feed */}
+      {/* Main Feed with Tabs */}
       <main className="flex-1 min-w-0">
-        <div className="space-y-4">
-          {loading && <div className="text-blue-600">Loading news items…</div>}
-          {error && <div className="text-red-600">{error}</div>}
-          {newsItems.length === 0 && !loading && <div className="text-gray-500">No news items found for this period.</div>}
-          {newsItems.map(item => <NewsItemCard key={item.id} item={item} />)}
+        {/* Tabs */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('referenced')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'referenced' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span>Top Referenced</span>
+                {topReferenced.length > 0 && (
+                  <span className="bg-blue-100 text-blue-800 text-xs rounded-full px-2 py-1">{topReferenced.length}</span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('voices')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'voices' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                <span>Voice Updates</span>
+                {voiceUpdates.length > 0 && (
+                  <span className="bg-blue-100 text-blue-800 text-xs rounded-full px-2 py-1">{voiceUpdates.length}</span>
+                )}
+              </div>
+            </button>
+          </nav>
         </div>
+        {/* Loading/Error State */}
+        {tabLoading && (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center gap-2 text-blue-600">
+              <Activity className="w-4 h-4 animate-spin" />
+              <span>Loading {activeTab === 'referenced' ? 'trending stories' : 'voice updates'}...</span>
+            </div>
+          </div>
+        )}
+        {tabError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-red-800">{tabError}</p>
+            <button 
+              onClick={activeTab === 'referenced' ? fetchTopReferenced : fetchVoiceUpdates}
+              className="mt-2 text-red-600 hover:text-red-800 text-sm underline"
+            >Retry</button>
+          </div>
+        )}
+        {/* Tab Content */}
+        {!tabLoading && !tabError && (
+          <>
+            {activeTab === 'referenced' && <TopReferencedFeed stories={topReferenced} />}
+            {activeTab === 'voices' && <VoiceUpdatesFeed updates={voiceUpdates} onUpdatePriority={updateVoicePriority} />}
+          </>
+        )}
       </main>
     </div>
   )
 }
 
-function NewsItemCard({ item }: { item: NewsItem }) {
-  const source = item.newsletters
+// --- QuickScan tab components ---
+function TopReferencedFeed({ stories }: { stories: any[] }) {
+  if (stories.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <TrendingUp className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+        <p>No trending stories found in the last 24 hours</p>
+        <p className="text-sm">Stories need 2+ mentions to appear here</p>
+      </div>
+    );
+  }
   return (
-    <div className="bg-white border rounded-lg p-6 hover:shadow-lg transition-shadow mb-4">
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold mb-1">{item.title}</h3>
-          <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
-            {source ? (
-              <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full">
-                <Tag className="w-3 h-3" />
-                <span>{source.sender_name || source.sender_email}</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-gray-400">
-                <Tag className="w-3 h-3" />
-                <span>Unknown Source</span>
-              </span>
-            )}
-            {source && (
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {new Date(source.received_date).toLocaleDateString()}
-              </span>
-            )}
-            {item.sentiment && (
-              <span className={`flex items-center gap-1 ${getSentimentColor(item.sentiment)}`}> 
-                <TrendingUp className="w-3 h-3" />
-                <span className="capitalize">{item.sentiment}</span>
-              </span>
+    <div className="space-y-4">
+      {stories.map((story, index) => (
+        <div key={story.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">{index + 1}</span>
+              <div className="flex items-center gap-2">
+                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-medium">{story.mention_count}x mentioned</span>
+                <span className="text-xs text-gray-500">Score: {story.trending_score?.toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="text-xs text-gray-500">{new Date(story.last_updated).toLocaleTimeString()}</div>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{story.title}</h3>
+          <p className="text-gray-700 mb-4">{story.summary}</p>
+          {story.trend_analysis && (
+            <div className="bg-blue-50 rounded-lg p-3 mb-4">
+              <p className="text-sm text-blue-800">{story.trend_analysis}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {story.sources.slice(0, 5).map((source: any, i: number) => (
+              <span key={i} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded" title={source.email}>{source.name}</span>
+            ))}
+            {story.sources.length > 5 && (
+              <span className="text-xs text-gray-500 px-2 py-1">+{story.sources.length - 5} more</span>
             )}
           </div>
         </div>
-      </div>
-      <div className="mb-2">
-        <p className="text-gray-700">{item.summary}</p>
-      </div>
-      {item.url && (
-        <div className="mt-2">
-          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Read more</a>
-        </div>
-      )}
+      ))}
     </div>
-  )
+  );
 }
 
-function getSentimentColor(sentiment: string) {
-  switch (sentiment) {
-    case 'positive': return 'text-green-600'
-    case 'negative': return 'text-red-600'
-    default: return 'text-gray-600'
+function VoiceUpdatesFeed({ updates, onUpdatePriority }: { updates: any[]; onUpdatePriority: (sourceId: string, priority: number) => void; }) {
+  if (updates.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+        <p>No voice updates in the last 24 hours</p>
+        <p className="text-sm">Set voice priorities in your sources to see updates here</p>
+      </div>
+    );
   }
+  return (
+    <div className="space-y-4">
+      {updates.map((update: any) => (
+        <div key={update.source.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {update.source.voice_priority > 0 && (
+                  <Star className="w-4 h-4 text-yellow-500" />
+                )}
+                <h3 className="font-semibold text-gray-900">{update.source.name}</h3>
+                <span className="text-xs text-gray-500">Priority: {update.source.voice_priority}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              {[0, 1, 2, 3].map((priority) => (
+                <button
+                  key={priority}
+                  onClick={() => onUpdatePriority(update.source.id, priority)}
+                  className={`w-6 h-6 rounded text-xs ${update.source.voice_priority === priority ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                  title={`Set priority to ${priority}`}
+                >
+                  {priority}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-4">
+            <h4 className="font-medium text-gray-900 mb-1">{update.latest_headline.title}</h4>
+            <p className="text-gray-700 text-sm mb-2">{update.latest_headline.summary}</p>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {new Date(update.latest_headline.published_at).toLocaleTimeString()}
+              </span>
+              <span>Importance: {(update.latest_headline.importance_score * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <span>{update.activity_summary.items_this_period} items today</span>
+              {update.source.expertise_keywords.length > 0 && (
+                <div className="flex gap-1">
+                  {update.source.expertise_keywords.slice(0, 3).map((keyword: string, i: number) => (
+                    <span key={i} className="text-xs bg-green-100 text-green-700 px-1 rounded">{keyword}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <span className="text-xs text-gray-500">Authority: {(update.source.authority_score * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 } 
