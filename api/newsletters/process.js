@@ -1,9 +1,13 @@
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+  require('dotenv').config({ path: '.env.local' });
+}
 const { supabase } = require('../../lib/supabase.node');
 const { GmailService } = require('../../lib/gmail');
 const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../../lib/openai');
 const { processNewsItemsForStories } = require('../headlines/top-referenced');
 const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 const { NEWSLETTER_DEFAULTS: CONFIG_DEFAULTS } = require('../../lib/config');
+const { validation } = require('../../lib/validation');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,8 +17,20 @@ module.exports = async function handler(req, res) {
   try {
     const { access_token, refresh_token, user_id } = req.body;
 
-    if (!access_token || !user_id) {
-      return res.status(400).json({ error: 'Access token and user ID required', type: 'input' });
+    // Basic input validation
+    const missing = validation.validateRequired(req.body, ['access_token', 'user_id']);
+    if (missing.length > 0) {
+      return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}`, type: 'validation' });
+    }
+
+    // Validate user_id format
+    if (!validation.isValidUuid(user_id)) {
+      return res.status(400).json({ error: 'Invalid user ID format', type: 'validation' });
+    }
+
+    // Validate access_token format
+    if (!validation.isValidAccessToken(access_token)) {
+      return res.status(400).json({ error: 'Invalid access token format', type: 'validation' });
     }
 
     // Initialize Gmail service with refresh token if provided
@@ -115,7 +131,7 @@ module.exports = async function handler(req, res) {
         // Extract all news items from the newsletter
         let newsItems;
         try {
-          newsItems = await extractNewsItemsFromNewsletter(newsletter.content, `${newsletter.senderName} <${newsletter.senderEmail}>`);
+          newsItems = await extractNewsItemsFromNewsletter(newsletter.content, `${newsletter.senderName} <${newsletter.senderEmail}>`, user_id);
         } catch (err) {
           await supabase.from('processing_logs').insert({
             user_id: user_id,
@@ -143,7 +159,7 @@ module.exports = async function handler(req, res) {
           // Generate embedding for the news item (use summary or content)
           let embedding;
           try {
-            embedding = await generateEmbedding(item.summary || item.content || item.title);
+            embedding = await generateEmbedding(item.summary || item.content || item.title, user_id);
           } catch (err) {
             await supabase.from('processing_logs').insert({
               user_id: user_id,
@@ -242,4 +258,16 @@ module.exports = async function handler(req, res) {
     console.error('Processing error:', error);
     return res.status(500).json({ error: 'Unknown processing error', type: 'unknown', details: error.message });
   }
+} 
+
+if (require.main === module) {
+  // Simple test: POST with missing fields
+  const req1 = { method: 'POST', body: {} };
+  const res1 = { status: code => ({ json: obj => console.log('Test1:', code, obj) }) };
+  module.exports(req1, res1);
+
+  // Simple test: wrong method
+  const req2 = { method: 'GET', body: {} };
+  const res2 = { status: code => ({ json: obj => console.log('Test2:', code, obj) }) };
+  module.exports(req2, res2);
 } 
