@@ -8,13 +8,13 @@ export const useAuth = () => {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase().auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabase().auth.onAuthStateChange(
       async (event, session) => {
         setUser(session?.user ?? null)
         setLoading(false)
@@ -26,7 +26,7 @@ export const useAuth = () => {
 
   // Supabase Google Auth for user login
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'google' })
+    await supabase().auth.signInWithOAuth({ provider: 'google' })
   }
 
   // Separate Gmail OAuth for API access
@@ -45,7 +45,7 @@ export const useAuth = () => {
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabase().auth.signOut()
     if (error) {
       console.error('Error signing out:', error)
     }

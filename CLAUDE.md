@@ -436,7 +436,7 @@ Module not found: Can't resolve '@/lib/config'
 - Test builds locally with `npm run build` before deploying
 - If you add new files to `lib/`, use `git add -f` to override gitignore when necessary
 
-### Supabase Environment Variable Issue (2025-08-29) - CORRECTED
+### Static Generation & Supabase Client Issue (2025-08-29) - FINAL FIX
 
 **Issue**: Build failed during static page generation with error:
 ```
@@ -444,21 +444,38 @@ Error: supabaseUrl is required.
 Error occurred prerendering page "/"
 ```
 
-**Root Cause**: Environment variable naming inconsistency between local development and Vercel deployment. Vercel was missing the `NEXT_PUBLIC_` prefixed environment variables that the client-side code requires.
+**Root Cause**: The Supabase client was initialized at module level, causing it to execute during static generation when environment variables may not be available. The import chain was: Page → AuthButton → useAuth → lib/supabase → createClient().
 
-**Fix Applied**: The issue was NOT with the code - it was with environment variable configuration in Vercel.
+**Industry Best Practice Solution Applied**: 
+Implemented lazy initialization pattern for external API clients.
 
-**CRITICAL: Environment Variable Setup for Vercel Deployment**:
-Vercel must have these environment variables configured in the dashboard:
+**Changes Made**:
+1. **lib/supabase.ts**: Changed from module-level initialization to lazy initialization function
+```typescript
+export const supabase = (): SupabaseClient => {
+  if (!supabaseInstance) {
+    // Initialize only when actually called
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return supabaseInstance;
+};
+```
+
+2. **hooks/useAuth.ts**: Updated to call supabase as function: `supabase().auth.getSession()`
+
+**Environment Variables (Correct Setup)**:
+For Vercel deployment, configure these in the Vercel dashboard:
 - `NEXT_PUBLIC_SUPABASE_URL` - The Supabase project URL (client-side accessible)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - The Supabase anonymous key (client-side accessible)
 - `NEXT_PUBLIC_GMAIL_CLIENT_ID` - Gmail OAuth client ID (client-side accessible)
+- `SUPABASE_URL` - Server-side Supabase URL (API routes only)
+- `SUPABASE_ANON_KEY` - Server-side anonymous key (API routes only)
+- `SUPABASE_SERVICE_ROLE_KEY` - Admin access key (API routes only)
+- `GMAIL_CLIENT_SECRET` - Gmail OAuth secret (API routes only)
+- `OPENAI_API_KEY` - OpenAI API key (API routes only)
 
-**For Developers**:
-- `NEXT_PUBLIC_` prefixed variables are accessible to browser/client code and required for static generation
-- DO NOT create placeholder logic - fix the environment variable configuration instead
-- Always ensure Vercel environment variables match the variable names used in the code
-- Test builds locally with `npm run build` but remember local .env.local may have different variable names than production
+**Key Learning**: 
+Never initialize external API clients at module level in Next.js applications. Use lazy initialization patterns to avoid static generation issues.
 
 ### Essential Lib Files for Deployment
 These files must be present for successful deployment:
@@ -475,36 +492,37 @@ These files must be present for successful deployment:
 
 ## 📝 **DEVELOPMENT SESSION LOGS**
 
-### Development Session - 2025-08-29 - Claude Code (Environment Variable Fix - CORRECTED)
+### Development Session - 2025-08-29 - Claude Code (Static Generation Fix - FINAL)
 
 #### Changes Made
-- [x] Bug fixes - CORRECTED approach to Supabase environment variable issue
-- [x] Refactoring - REMOVED unnecessary placeholder logic from lib/supabase.ts
-- [x] Documentation updates - Updated deployment troubleshooting with correct root cause and solution
+- [x] Bug fixes - FINAL FIX: Implemented lazy initialization pattern for Supabase client
+- [x] Refactoring - Changed lib/supabase.ts from module-level to function-based initialization
+- [x] Refactoring - Updated hooks/useAuth.ts to call supabase() as function
+- [x] Documentation updates - Documented proper Next.js external API client patterns
 
 #### Simplicity Review
-- [x] Removed any unnecessary complexity - ELIMINATED placeholder logic that was the wrong solution
-- [x] Followed existing patterns - Restored proper environment variable usage without fallbacks
-- [x] Avoided overengineering - Fixed root cause (env var config) instead of adding code workarounds
-- [x] Code is readable and maintainable - Clean client initialization without unnecessary logic
+- [x] Removed any unnecessary complexity - Clean lazy initialization without overcomplicated patterns
+- [x] Followed existing patterns - Used industry standard lazy initialization for Next.js apps
+- [x] Avoided overengineering - Simple singleton pattern, no complex factory logic
+- [x] Code is readable and maintainable - Clear function-based client access
 
 #### Quality Checks Completed  
-- [x] `npm run build` passed locally - ✅ Build succeeds with proper environment variable names
-- [x] Manual testing completed - ✅ App works correctly with proper configuration
-- [x] All imports resolve correctly - ✅ Clean client-side Supabase initialization
+- [x] `npm run build` passed locally - ✅ Build succeeds with lazy initialization pattern
+- [x] Manual testing completed - ✅ App functionality preserved with new pattern
+- [x] All imports resolve correctly - ✅ Clean function-based Supabase client access
 
 #### Issues Encountered & Solutions
-- Issue 1: Initially implemented wrong solution (placeholder logic) → Solution: Identified real issue is Vercel environment variable configuration, not code
-- Issue 2: Vercel missing NEXT_PUBLIC_ prefixed environment variables → Solution: Document proper Vercel environment variable setup
+- Issue 1: Multiple wrong solutions (placeholders, env var assumptions) → Solution: Root cause was module-level client initialization during static generation
+- Issue 2: Static generation failing due to immediate client initialization → Solution: Implemented lazy initialization pattern (industry best practice)
 
 #### Next Steps / Priority Changes  
-- [x] Updated CLAUDE.md with CORRECT deployment troubleshooting
-- [x] Documented that Vercel needs NEXT_PUBLIC_ prefixed variables for client-side code
-- [x] Removed misleading information about placeholder patterns
+- [x] Updated CLAUDE.md with FINAL correct solution and environment variable documentation
+- [x] Documented lazy initialization pattern as best practice for Next.js external API clients
+- [x] Provided complete environment variable reference for all deployment scenarios
 
 #### PR Details
 - Branch: security-improvements (continuing existing PR)
-- Correction will be pushed as additional commit
+- Final fix will be pushed as additional commit
 
 ### Development Session - 2025-08-29 - Claude Code (Security Hardening)
 
