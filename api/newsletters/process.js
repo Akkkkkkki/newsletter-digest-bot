@@ -3,7 +3,7 @@ if (process.env.NODE_ENV !== 'production' && require.main === module) {
 }
 const { supabase } = require('../../lib/supabase.node');
 const { GmailService } = require('../../lib/gmail');
-const { extractNewsletterInsights, generateEmbedding, extractNewsItemsFromNewsletter } = require('../../lib/openai');
+const { extractNewsletterInsights, generateEmbedding, generateEmbeddingsBatch, extractNewsItemsFromNewsletter } = require('../../lib/openai');
 const { processNewsItemsForStories } = require('../headlines/top-referenced');
 const { NEWSLETTER_DEFAULTS } = require('../../lib/config');
 const { NEWSLETTER_DEFAULTS: CONFIG_DEFAULTS } = require('../../lib/config');
@@ -91,75 +91,80 @@ module.exports = async function handler(req, res) {
 
     const processedNewsletters = [];
 
-    for (const newsletter of newsletters) {
-      try {
-        // Check if newsletter already exists
-        const { data: existingNewsletter } = await supabase
-          .from('newsletters')
-          .select('id')
-          .eq('user_id', user_id)
-          .eq('gmail_message_id', newsletter.id)
-          .single();
+    // Process newsletters concurrently to prevent timeouts
+    const concurrencyLimit = 5; // Process max 5 newsletters simultaneously
+    const newsletterBatches = [];
+    for (let i = 0; i < newsletters.length; i += concurrencyLimit) {
+      newsletterBatches.push(newsletters.slice(i, i + concurrencyLimit));
+    }
 
-        if (existingNewsletter) {
-          continue; // Skip if already processed
-        }
-
-        // Insert newsletter record
-        const { data: insertedNewsletter, error: insertError } = await supabase
-          .from('newsletters')
-          .insert({
-            user_id: user_id,
-            gmail_message_id: newsletter.id,
-            thread_id: newsletter.threadId,
-            subject: newsletter.subject,
-            sender_email: newsletter.senderEmail,
-            sender_name: newsletter.senderName,
-            received_date: newsletter.date,
-            raw_content: newsletter.content,
-            labels: newsletter.labels,
-            status: 'processing'
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Error inserting newsletter:', insertError);
-          continue;
-        }
-
-        // Extract all news items from the newsletter
-        let newsItems;
+    for (const batch of newsletterBatches) {
+      const batchPromises = batch.map(async (newsletter) => {
         try {
-          newsItems = await extractNewsItemsFromNewsletter(newsletter.content, `${newsletter.senderName} <${newsletter.senderEmail}>`, user_id);
-        } catch (err) {
-          await supabase.from('processing_logs').insert({
-            user_id: user_id,
-            step: 'extract_news_items',
-            status: 'failed',
-            error_message: err.message
-          });
-          return res.status(500).json({ error: 'OpenAI extraction error', type: 'openai', details: err.message });
-        }
+          // Check if newsletter already exists
+          const { data: existingNewsletter } = await supabase
+            .from('newsletters')
+            .select('id')
+            .eq('user_id', user_id)
+            .eq('gmail_message_id', newsletter.id)
+            .single();
 
-        // Find matching source_id from newsletter_sources
-        const { data: sourceMatch } = await supabase
-          .from('newsletter_sources')
-          .select('id')
-          .eq('user_id', user_id)
-          .eq('email_address', newsletter.senderEmail)
-          .single();
+          if (existingNewsletter) {
+            return null; // Skip if already processed
+          }
 
-        const sourceId = sourceMatch?.id || null;
+          // Insert newsletter record
+          const { data: insertedNewsletter, error: insertError } = await supabase
+            .from('newsletters')
+            .insert({
+              user_id: user_id,
+              gmail_message_id: newsletter.id,
+              thread_id: newsletter.threadId,
+              subject: newsletter.subject,
+              sender_email: newsletter.senderEmail,
+              sender_name: newsletter.senderName,
+              received_date: newsletter.date,
+              raw_content: newsletter.content,
+              labels: newsletter.labels,
+              status: 'processing'
+            })
+            .select()
+            .single();
 
-        // Insert each news item into news_items table
-        const insertedNewsItems = [];
-        for (let i = 0; i < newsItems.length; i++) {
-          const item = newsItems[i];
-          // Generate embedding for the news item (use summary or content)
-          let embedding;
+          if (insertError) {
+            console.error('Error inserting newsletter:', insertError);
+            return null;
+          }
+
+          // Extract all news items from the newsletter
+          let newsItems;
           try {
-            embedding = await generateEmbedding(item.summary || item.content || item.title, user_id);
+            newsItems = await extractNewsItemsFromNewsletter(newsletter.content, `${newsletter.senderName} <${newsletter.senderEmail}>`, user_id);
+          } catch (err) {
+            await supabase.from('processing_logs').insert({
+              user_id: user_id,
+              step: 'extract_news_items',
+              status: 'failed',
+              error_message: err.message
+            });
+            throw err; // Re-throw to be caught in batch processing
+          }
+
+          // Find matching source_id from newsletter_sources
+          const { data: sourceMatch } = await supabase
+            .from('newsletter_sources')
+            .select('id')
+            .eq('user_id', user_id)
+            .eq('email_address', newsletter.senderEmail)
+            .single();
+
+          const sourceId = sourceMatch?.id || null;
+
+          // Generate embeddings for all news items in batch (more efficient)
+          const embeddingTexts = newsItems.map(item => item.summary || item.content || item.title);
+          let embeddings;
+          try {
+            embeddings = await generateEmbeddingsBatch(embeddingTexts, user_id);
           } catch (err) {
             await supabase.from('processing_logs').insert({
               user_id: user_id,
@@ -167,86 +172,103 @@ module.exports = async function handler(req, res) {
               status: 'failed',
               error_message: err.message
             });
-            return res.status(500).json({ error: 'OpenAI embedding error', type: 'openai', details: err.message });
+            throw err; // Re-throw to be caught in batch processing
           }
-          const { data: insertedItem, error: itemError } = await supabase
-            .from('news_items')
-            .insert({
-              newsletter_id: insertedNewsletter.id,
-              user_id: user_id,
-              source_id: sourceId,
-              title: item.title,
-              summary: item.summary,
-              content: item.content,
-              url: item.url,
-              position: i,
-              embedding: embedding,
-              topics: item.topics || [],
-              people_mentioned: item.people_mentioned || [],
-              products_mentioned: item.products_mentioned || [],
-              companies_mentioned: item.companies_mentioned || [],
-              events_mentioned: item.events_mentioned || [],
-              sentiment: item.sentiment,
-              importance_score: item.importance_score || 0.5,
-              extraction_model: item.extraction_model || 'gpt-3.5-turbo',
-              confidence_score: item.confidence_score || 0.8
+
+          // Insert each news item into news_items table
+          const insertedNewsItems = [];
+          for (let i = 0; i < newsItems.length; i++) {
+            const item = newsItems[i];
+            const embedding = embeddings[i];
+            const { data: insertedItem, error: itemError } = await supabase
+              .from('news_items')
+              .insert({
+                newsletter_id: insertedNewsletter.id,
+                user_id: user_id,
+                source_id: sourceId,
+                title: item.title,
+                summary: item.summary,
+                content: item.content,
+                url: item.url,
+                position: i,
+                embedding: embedding,
+                topics: item.topics || [],
+                people_mentioned: item.people_mentioned || [],
+                products_mentioned: item.products_mentioned || [],
+                companies_mentioned: item.companies_mentioned || [],
+                events_mentioned: item.events_mentioned || [],
+                sentiment: item.sentiment,
+                importance_score: item.importance_score || 0.5,
+                extraction_model: item.extraction_model || 'gpt-3.5-turbo',
+                confidence_score: item.confidence_score || 0.8
+              })
+              .select()
+              .single();
+
+            if (!itemError && insertedItem) {
+              // Add newsletter info for story clustering
+              insertedItem.newsletters = {
+                sender_name: newsletter.senderName,
+                sender_email: newsletter.senderEmail,
+                subject: newsletter.subject,
+                received_date: newsletter.date,
+                credibility_score: sourceMatch?.credibility_score || 0.5
+              };
+              insertedNewsItems.push(insertedItem);
+            }
+          }
+
+          // Process news items for story clustering (async - don't wait)
+          if (insertedNewsItems.length > 0) {
+            processNewsItemsForStories(user_id, insertedNewsItems).catch(error => {
+              console.error('Story clustering error:', error);
+              supabase.from('processing_logs').insert({
+                user_id: user_id,
+                step: 'story_clustering',
+                status: 'failed',
+                error_message: error.message
+              });
+            });
+          }
+
+          // Update newsletter status
+          await supabase
+            .from('newsletters')
+            .update({ 
+              status: 'completed',
+              processed_at: new Date().toISOString()
             })
-            .select()
-            .single();
+            .eq('id', insertedNewsletter.id);
 
-          if (!itemError && insertedItem) {
-            // Add newsletter info for story clustering
-            insertedItem.newsletters = {
-              sender_name: newsletter.senderName,
-              sender_email: newsletter.senderEmail,
-              subject: newsletter.subject,
-              received_date: newsletter.date,
-              credibility_score: sourceMatch?.credibility_score || 0.5
-            };
-            insertedNewsItems.push(insertedItem);
-          }
-        }
+          return {
+            ...insertedNewsletter,
+            news_items_count: newsItems.length
+          };
 
-        // Process news items for story clustering (async - don't wait)
-        if (insertedNewsItems.length > 0) {
-          processNewsItemsForStories(user_id, insertedNewsItems).catch(error => {
-            console.error('Story clustering error:', error);
-            supabase.from('processing_logs').insert({
+        } catch (error) {
+          console.error('Error processing newsletter:', error);
+          // Log error for this specific newsletter
+          await supabase
+            .from('processing_logs')
+            .insert({
               user_id: user_id,
-              step: 'story_clustering',
+              step: 'process_newsletter',
               status: 'failed',
               error_message: error.message
             });
-          });
+          return null; // Return null for failed newsletters
         }
+      });
 
-        // Update newsletter status
-        await supabase
-          .from('newsletters')
-          .update({ 
-            status: 'completed',
-            processed_at: new Date().toISOString()
-          })
-          .eq('id', insertedNewsletter.id);
-
-        processedNewsletters.push({
-          ...insertedNewsletter,
-          news_items_count: newsItems.length
-        });
-
-      } catch (error) {
-        console.error('Error processing newsletter:', error);
-        // Log error
-        await supabase
-          .from('processing_logs')
-          .insert({
-            user_id: user_id,
-            step: 'process_newsletter',
-            status: 'failed',
-            error_message: error.message
-          });
-        return res.status(500).json({ error: 'Newsletter processing error', type: 'processing', details: error.message });
-      }
+      // Wait for batch to complete and collect results
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      // Process successful results
+      batchResults.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+          processedNewsletters.push(result.value);
+        }
+      });
     }
 
     return res.status(200).json({

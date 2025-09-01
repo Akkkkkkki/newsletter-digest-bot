@@ -1,5 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+// IMPORTANT: This connects to REMOTE SUPABASE ONLY - no local database
+// Client-side Supabase client with lazy initialization for Next.js
 let supabaseInstance: SupabaseClient | null = null;
 
 export const supabase = (): SupabaseClient => {
